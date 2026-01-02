@@ -5,19 +5,16 @@ import "fmt"
 type Error struct {
 	Code    string
 	Message string
-
-	Cause error
-
-	Meta   map[string]string
+	Cause   error
+	Meta    map[string]string
 	FixWith []string
 }
 
-func New(code string) *Error {
-	msg := CatalogMessage(code)
+func New(entry Entry) *Error {
 	return &Error{
-		Code:    code,
-		Message: msg,
-		Meta:   map[string]string{},
+		Code:    entry.Code,
+		Message: entry.Message,
+		Meta:    map[string]string{},
 	}
 }
 
