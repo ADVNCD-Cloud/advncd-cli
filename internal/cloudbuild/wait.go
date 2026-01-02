@@ -22,7 +22,12 @@ func WaitBuild(ctx context.Context, req WaitRequest) (*Build, error) {
 		req.PollEvery = 3 * time.Second
 	}
 
-	url := fmt.Sprintf("https://cloudbuild.googleapis.com/v1/projects/%s/builds/%s", req.ProjectID, req.BuildID)
+	region := req.Region
+	if region == "" {
+		region = "global"
+	}
+
+	url := fmt.Sprintf("https://cloudbuild.googleapis.com/v1/projects/%s/locations/%s/builds/%s", req.ProjectID, region, req.BuildID)
 	client := &http.Client{Timeout: 20 * time.Second}
 
 	ticker := time.NewTicker(req.PollEvery)

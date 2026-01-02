@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"bytes"
 )
 
 func writeTarGz(w io.Writer, dir string) error {
@@ -73,4 +74,13 @@ func writeTarGz(w io.Writer, dir string) error {
 		}
 		return nil
 	})
+}
+
+// TarGzBytes archives dir to tar.gz bytes (MVP: in-memory).
+func TarGzBytes(dir string) ([]byte, error) {
+	var buf bytes.Buffer
+	if err := writeTarGz(&buf, dir); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }

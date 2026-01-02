@@ -18,6 +18,7 @@ type SubmitRequest struct {
 type WaitRequest struct {
 	AccessToken string
 	ProjectID   string
+	Region      string
 	BuildID     string
-	PollEvery time.Duration // seconds (we'll store duration as seconds to avoid extra imports here)
+	PollEvery   time.Duration
 }
