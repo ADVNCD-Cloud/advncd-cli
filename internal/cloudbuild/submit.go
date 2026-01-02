@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/apperr"
@@ -24,8 +25,7 @@ type createBuildReq struct {
 		Name string   `json:"name"`
 		Args []string `json:"args"`
 	} `json:"steps"`
-	Images  []string `json:"images,omitempty"`
-	Timeout string   `json:"timeout,omitempty"`
+	Timeout string `json:"timeout,omitempty"`
 	Options struct {
 		Logging string `json:"logging,omitempty"`
 	} `json:"options,omitempty"`
@@ -53,6 +53,10 @@ func SubmitBuildpacksBuild(ctx context.Context, req SubmitRequest) (*Build, erro
 	// 2) upload to GCS bucket
 	bucket := fmt.Sprintf("%s_cloudbuild", req.ProjectID)
 	object := fmt.Sprintf("advncd/source-%d.tar.gz", time.Now().Unix())
+
+	// sanitize: Cloud Build rejects newlines in storageSource fields
+	bucket = strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(bucket, "\n", ""), "\r", ""))
+	object = strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(object, "\n", ""), "\r", ""))
 
 	status, upErr := gcs.UploadObjectMedia(ctx, req.AccessToken, bucket, object, tgz)
 	if upErr != nil {
@@ -86,13 +90,20 @@ func SubmitBuildpacksBuild(ctx context.Context, req SubmitRequest) (*Build, erro
 
 	// 3) create build in regional Cloud Build endpoint
 	// Note: builds.create is regional: /v1/projects/{project}/locations/{region}/builds
-	endpoint := fmt.Sprintf("https://cloudbuild.googleapis.com/v1/projects/%s/locations/%s/builds", req.ProjectID, detectBuildRegionFromImage(req.Image))
+	endpoint := fmt.Sprintf(
+		"https://cloudbuild.googleapis.com/v1/projects/%s/locations/%s/builds",
+		req.ProjectID,
+		detectBuildRegionFromImage(req.Image),
+	)
 
 	cb := createBuildReq{}
 	cb.Source.StorageSource.Bucket = bucket
 	cb.Source.StorageSource.Object = object
 	cb.Timeout = "1200s"
-	cb.Images = []string{req.Image}
+
+	// IMPORTANT: do NOT set an "images" field here.
+	// pack --publish pushes directly to the registry; setting images makes Cloud Build
+	// try to track/push build artifacts and it fails.
 	cb.Options.Logging = "CLOUD_LOGGING_ONLY"
 
 	cb.Steps = append(cb.Steps, struct {
