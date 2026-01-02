@@ -35,5 +35,8 @@ func init() {
 	rootCmd.AddCommand(logoutCmd)
 
 	rootCmd.AddCommand(authCmd)
+	rootCmd.AddCommand(initCmd)
+	rootCmd.AddCommand(publishCmd)
+	
 	authCmd.AddCommand(authPrintAccessTokenCmd)
 }
