@@ -148,6 +148,11 @@ var publishCmd = &cobra.Command{
 		}
 
 		fmt.Println("✓ Service deployed")
+		fmt.Println("Allowing unauthenticated access...")
+		if err := gcprun.AllowUnauthenticated(ctx, tb.AccessToken, cfg.ProjectID, cfg.Region, svc); err != nil {
+			return err
+		}
+		fmt.Println("✓ Public access enabled")
 		if deployed.URL != "" {
 			fmt.Println()
 			fmt.Printf("URL: %s\n", deployed.URL)
