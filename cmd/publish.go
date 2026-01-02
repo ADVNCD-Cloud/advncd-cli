@@ -14,6 +14,7 @@ import (
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/config"
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/gcprun"
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/projectslug"
+	"github.com/ADVNCD-Cloud/advncd-cli/internal/gcpartifact"
 )
 
 var (
@@ -87,6 +88,10 @@ var publishCmd = &cobra.Command{
 		fmt.Println()
 
 		// 1) Build & push container via Cloud Build (Buildpacks)
+		fmt.Println("Ensuring Artifact Registry repo exists...")
+		if err := gcpartifact.EnsureDockerRepo(ctx, tb.AccessToken, cfg.ProjectID, cfg.Region, "advncd"); err != nil {
+			return err
+		}
 		fmt.Println("Building (Cloud Build + Buildpacks)...")
 		build, err := cloudbuild.SubmitBuildpacksBuild(ctx, cloudbuild.SubmitRequest{
 			AccessToken: tb.AccessToken,
@@ -107,6 +112,7 @@ var publishCmd = &cobra.Command{
 		final, err := cloudbuild.WaitBuild(ctx, cloudbuild.WaitRequest{
 			AccessToken: tb.AccessToken,
 			ProjectID:   cfg.ProjectID,
+			Region:      cfg.Region,
 			BuildID:     build.ID,
 			PollEvery:   3 * time.Second,
 		})
