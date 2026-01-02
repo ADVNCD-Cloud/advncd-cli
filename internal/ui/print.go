@@ -52,3 +52,10 @@ func PrintError(e *apperr.Error) {
 func PrintPlainError(err error) {
 	fmt.Printf("Error: %v\n", err)
 }
+
+func PrintAuthCodeReceived(redirectURI, listenAddr string) {
+	fmt.Println()
+	fmt.Println("✓ Authorization callback received")
+	fmt.Printf("  Redirect URI: %s\n", redirectURI)
+	fmt.Printf("  Listener:     %s\n", listenAddr)
+}
