@@ -5,20 +5,24 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
+	"github.com/joho/godotenv"
 	"github.com/spf13/cobra"
 
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/auth"
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/cloudbuild"
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/config"
+	"github.com/ADVNCD-Cloud/advncd-cli/internal/gcpartifact"
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/gcprun"
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/projectslug"
-	"github.com/ADVNCD-Cloud/advncd-cli/internal/gcpartifact"
 )
 
 var (
-	publishName string
+	publishName    string
+	publishEnvFile string
+	publishEnv     []string
 )
 
 var publishCmd = &cobra.Command{
@@ -74,6 +78,10 @@ var publishCmd = &cobra.Command{
 			fmt.Println("fix: run `advncd publish --name <service>`")
 			return nil
 		}
+		envVars, err := buildPublishEnv(publishEnvFile, publishEnv)
+		if err != nil {
+			return err
+		}
 
 		// Artifact Registry image
 		// repo = advncd (MVP)
@@ -85,6 +93,9 @@ var publishCmd = &cobra.Command{
 		fmt.Printf("  region:  %s\n", cfg.Region)
 		fmt.Printf("  service: %s\n", svc)
 		fmt.Printf("  image:   %s\n", image)
+		if len(envVars) > 0 {
+			fmt.Printf("  env:     %d vars\n", len(envVars))
+		}
 		fmt.Println()
 
 		// 1) Build & push container via Cloud Build (Buildpacks)
@@ -142,6 +153,7 @@ var publishCmd = &cobra.Command{
 			Region:      cfg.Region,
 			ServiceName: svc,
 			Image:       image,
+			Env:         envVars,
 		})
 		if err != nil {
 			return err
@@ -168,4 +180,41 @@ var publishCmd = &cobra.Command{
 
 func init() {
 	publishCmd.Flags().StringVar(&publishName, "name", "", "Cloud Run service name (defaults to current folder name)")
+	publishCmd.Flags().StringVar(&publishEnvFile, "env-file", "", "Path to dotenv file with runtime env vars")
+	publishCmd.Flags().StringArrayVar(&publishEnv, "env", nil, "Runtime env var override/addition (KEY=VALUE), repeatable")
+}
+
+func buildPublishEnv(envFile string, envArgs []string) (map[string]string, error) {
+	merged := map[string]string{}
+
+	if envFile != "" {
+		fileEnv, err := godotenv.Read(envFile)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil, fmt.Errorf("env-file not found: %s", envFile)
+			}
+			return nil, fmt.Errorf("failed to read env-file %q: %w", envFile, err)
+		}
+		for k, v := range fileEnv {
+			if strings.TrimSpace(k) == "" {
+				return nil, fmt.Errorf("env-file %q contains an empty key", envFile)
+			}
+			merged[k] = v
+		}
+	}
+
+	for _, pair := range envArgs {
+		i := strings.Index(pair, "=")
+		if i < 0 {
+			return nil, fmt.Errorf("invalid --env %q: expected KEY=VALUE", pair)
+		}
+		key := pair[:i]
+		val := pair[i+1:]
+		if strings.TrimSpace(key) == "" {
+			return nil, fmt.Errorf("invalid --env %q: key cannot be empty", pair)
+		}
+		merged[key] = val
+	}
+
+	return merged, nil
 }

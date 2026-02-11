@@ -1,0 +1,211 @@
+package views
+
+type Crumb struct {
+	Label string
+	Href  string
+}
+
+templ Layout(title string, active string, crumbs []Crumb, content templ.Component) {
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>{title} · Advncd</title>
+
+	<!-- Tailwind + DaisyUI CDN -->
+	<link
+		href="https://cdn.jsdelivr.net/npm/daisyui@4.7.2/dist/full.min.css"
+		rel="stylesheet"
+		type="text/css"
+	/>
+	<script src="https://cdn.tailwindcss.com"></script>
+	<script src="https://unpkg.com/htmx.org@1.9.12"></script>
+	<style>
+		/* по умолчанию скрываем индикаторы */
+		.htmx-indicator { display: none; }
+
+		/* когда элемент (или его потомок) в состоянии запроса — показываем */
+		.htmx-request .htmx-indicator { display: inline-block; }
+	</style>
+</head>
+
+<body class="bg-base-200">
+
+<div class="drawer lg:drawer-open">
+	<input id="drawer-toggle" type="checkbox" class="drawer-toggle" />
+
+	<!-- Main content -->
+	<div class="drawer-content flex flex-col">
+		<!-- Topbar -->
+		<div class="navbar bg-base-100 shadow-sm">
+			<div class="flex-none lg:hidden">
+				<label for="drawer-toggle" class="btn btn-square btn-ghost">
+					☰
+				</label>
+			</div>
+
+			<div class="flex-1">
+				<a href="/" class="btn btn-ghost text-xl">Advncd</a>
+			</div>
+
+			<div class="flex-none gap-2">
+				<span class="text-sm text-base-content/70 hidden sm:block">
+					Local-first Cloud Run
+				</span>
+			</div>
+		</div>
+		
+		<!-- Breadcrumbs -->
+		if crumbs != nil && len(crumbs) > 0 {
+			<div class="px-4 md:px-6 pt-4">
+				<div class="breadcrumbs text-sm">
+					<ul>
+						for i, c := range crumbs {
+							if i == len(crumbs)-1 || c.Href == "" {
+								<li><span class="text-base-content/70">{c.Label}</span></li>
+							} else {
+								<li><a class="link" href={c.Href}>{c.Label}</a></li>
+							}
+						}
+					</ul>
+				</div>
+			</div>
+		}
+
+		<!-- Page content -->
+		<main class="p-4 md:p-6">
+			@content
+		</main>
+	</div>
+
+	<!-- Sidebar -->
+	<div class="drawer-side">
+		<label for="drawer-toggle" class="drawer-overlay"></label>
+
+		<aside class="w-64 bg-base-100 min-h-full border-r border-base-300">
+			<div class="p-4 text-lg font-semibold">
+				Dashboard
+			</div>
+
+			<ul class="menu p-2 gap-1">
+				<li>
+					if active == "overview" {
+						<a href="/" class="rounded-lg active">
+							<span class="inline-flex items-center gap-2">
+								@IconHome()
+								<span>Overview</span>
+							</span>
+						</a>
+					} else {
+						<a href="/" class="rounded-lg">
+							<span class="inline-flex items-center gap-2">
+								@IconHome()
+								<span>Overview</span>
+							</span>
+						</a>
+					}
+				</li>
+
+				<li>
+					if active == "services" {
+						<a href="/services" class="rounded-lg active">
+							<span class="inline-flex items-center gap-2">
+								@IconServer()
+								<span>Services</span>
+							</span>
+						</a>
+					} else {
+						<a href="/services" class="rounded-lg">
+							<span class="inline-flex items-center gap-2">
+								@IconServer()
+								<span>Services</span>
+							</span>
+						</a>
+					}
+				</li>
+
+				<li class="menu-title mt-4">
+					<span>Cloud</span>
+				</li>
+
+				<li>
+					<a href="https://console.cloud.google.com/run" target="_blank" rel="noopener" class="rounded-lg">
+						<span class="inline-flex items-center gap-2">
+							@IconExternalLink()
+							<span>GCP Console</span>
+						</span>
+					</a>
+				</li>
+			</ul>
+		</aside>
+	</div>
+</div>
+
+</body>
+<script>
+//   window.advncdExplainStart = (name) => {
+//     const card = document.getElementById("explain-card");
+//     const pre = card.querySelector("pre");
+//     const hint = card.querySelector("[data-explain-hint]");
+//     const spinner = card.querySelector("#explain-loading");
+//     const btns = document.querySelectorAll("button[onclick*='advncdExplainStart']");
+
+//     // show spinner
+//     if (spinner) spinner.style.display = "inline-block";
+
+//     // disable buttons
+//     btns.forEach(b => b.disabled = true);
+
+//     // ensure we have a <pre> to write into
+//     let out = pre;
+//     if (!out) {
+//       if (hint) hint.remove();
+//       out = document.createElement("pre");
+//       out.className = "whitespace-pre-wrap text-sm";
+//       card.querySelector(".card-body").appendChild(out);
+//     }
+//     out.textContent = "Starting…\n";
+
+//     const es = new EventSource(`/services/${encodeURIComponent(name)}/explain/stream`);
+//     es.onmessage = (ev) => {
+//       try {
+//         const msg = JSON.parse(ev.data);
+//         if (msg.type === "status") {
+//           out.textContent = msg.text + "\n";
+//           return;
+//         }
+//         if (msg.type === "done") {
+//           out.textContent = msg.text;
+//           es.close();
+//         }
+//         if (msg.type === "error") {
+//           out.textContent = "Error: " + msg.text;
+//           es.close();
+//         }
+//       } catch (e) {
+//         out.textContent = "Error: bad stream message";
+//         es.close();
+//       }
+//     };
+//     es.onerror = () => {
+//       out.textContent = "Error: stream connection failed";
+//       try { es.close(); } catch (_) {}
+//     };
+//     es.addEventListener("close", () => {
+//       // no-op
+//     });
+
+//     const cleanup = () => {
+//       if (spinner) spinner.style.display = "none";
+//       btns.forEach(b => b.disabled = false);
+//     };
+
+//     // close handlers call cleanup after small delay
+//     const originalClose = es.close.bind(es);
+//     es.close = () => { originalClose(); cleanup(); };
+//   };
+</script>
+<script src="/static/explain.js"></script>
+</html>
+}
