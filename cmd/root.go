@@ -38,5 +38,16 @@ func init() {
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(publishCmd)
 	
+	servicesCmd.AddCommand(servicesDescribeCmd)
+	servicesCmd.AddCommand(servicesOpenCmd)
+	servicesCmd.AddCommand(servicesLogsCmd)
+	servicesCmd.AddCommand(servicesMetricsCmd)
+	rootCmd.AddCommand(servicesCmd)
+	
+	llmCmd.AddCommand(llmStatusCmd)
+	rootCmd.AddCommand(llmCmd)
+	servicesCmd.AddCommand(servicesExplainCmd)
+
+	rootCmd.AddCommand(dashboardCmd)
 	authCmd.AddCommand(authPrintAccessTokenCmd)
 }

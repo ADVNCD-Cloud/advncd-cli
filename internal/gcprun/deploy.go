@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sort"
 	"time"
 
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/apperr"
@@ -24,10 +25,24 @@ type DeployRequest struct {
 	Region      string
 	ServiceName string
 	Image       string
+	Env         map[string]string
 }
 
 type DeployResult struct {
 	URL string
+}
+
+type envVar struct {
+	Name  string `json:"name"`
+	Value string `json:"value,omitempty"`
+}
+
+type container struct {
+	Image string `json:"image"`
+	Ports []struct {
+		ContainerPort int `json:"containerPort,omitempty"`
+	} `json:"ports,omitempty"`
+	Env []envVar `json:"env,omitempty"`
 }
 
 // Cloud Run v2 service representation (minimal)
@@ -35,12 +50,7 @@ type service struct {
 	Name string `json:"name,omitempty"`
 	URI  string `json:"uri,omitempty"`
 	Template struct {
-		Containers []struct {
-			Image string `json:"image"`
-			Ports []struct {
-				ContainerPort int `json:"containerPort,omitempty"`
-			} `json:"ports,omitempty"`
-		} `json:"containers"`
+		Containers []container `json:"containers"`
 	} `json:"template,omitempty"`
 }
 
@@ -73,17 +83,13 @@ func DeployService(ctx context.Context, req DeployRequest) (*DeployResult, error
 	}
 
 	// update existing
-	current.Template.Containers = []struct {
-		Image string `json:"image"`
-		Ports []struct {
-			ContainerPort int `json:"containerPort,omitempty"`
-		} `json:"ports,omitempty"`
-	}{
+	current.Template.Containers = []container{
 		{
 			Image: req.Image,
 			Ports: []struct {
 				ContainerPort int `json:"containerPort,omitempty"`
 			}{{ContainerPort: 8080}},
+			Env: buildContainerEnv(req.Env),
 		},
 	}
 
@@ -163,17 +169,13 @@ func createService(ctx context.Context, req DeployRequest) (string, error) {
 	u.RawQuery = q.Encode()
 
 	payload := service{}
-	payload.Template.Containers = []struct {
-		Image string `json:"image"`
-		Ports []struct {
-			ContainerPort int `json:"containerPort,omitempty"`
-		} `json:"ports,omitempty"`
-	}{
+	payload.Template.Containers = []container{
 		{
 			Image: req.Image,
 			Ports: []struct {
 				ContainerPort int `json:"containerPort,omitempty"`
 			}{{ContainerPort: 8080}},
+			Env: buildContainerEnv(req.Env),
 		},
 	}
 
@@ -246,4 +248,22 @@ func patchService(ctx context.Context, req DeployRequest, current *service) (str
 		return op.Name, nil
 	}
 	return "", nil
+}
+
+func buildContainerEnv(envMap map[string]string) []envVar {
+	if len(envMap) == 0 {
+		return nil
+	}
+
+	keys := make([]string, 0, len(envMap))
+	for k := range envMap {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	out := make([]envVar, 0, len(keys))
+	for _, k := range keys {
+		out = append(out, envVar{Name: k, Value: envMap[k]})
+	}
+	return out
 }

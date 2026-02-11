@@ -1,0 +1,296 @@
+package views
+
+import "time"
+
+type ConditionVM struct {
+	Type  string
+	State string
+}
+
+type ServiceDetailVM struct {
+	Error string
+	Now   time.Time
+
+	Name    string
+	Project string
+	Region  string
+
+	URL   string
+	Image string
+
+	Conditions []ConditionVM
+
+	ConsoleURL string
+
+	// Logs
+	LogsURL1h  string
+	LogsURL6h  string
+	LogsURL24h string
+	LogsURLErr string
+	LogsQuery  string
+
+	// Metrics
+	MetricsURL1h  string
+	MetricsURL6h  string
+	MetricsURL24h string
+
+	AuthStatus string // "ok" | "expired" | "missing"
+	AuthHint   string // e.g. "Run: advncd login"
+
+	ExplainText string
+}
+
+templ ServiceDetail(vm ServiceDetailVM) {
+<div class="max-w-5xl">
+	<div class="flex items-start justify-between gap-4">
+		<div>
+			<h1 class="text-2xl font-semibold">Service: {vm.Name}</h1>
+			<p class="text-base-content/70 mt-1">{vm.Project} ({vm.Region})</p>
+		</div>
+
+		<div class="flex gap-2 flex-wrap justify-end">
+			if vm.URL != "" {
+				<a class="btn btn-sm" href={vm.URL} target="_blank" rel="noopener">Open ↗</a>
+			}
+
+			// Logs
+			if vm.AuthStatus == "ok" && vm.LogsURL1h != "" {
+				<a class="btn btn-sm btn-outline" href={vm.LogsURL1h} target="_blank" rel="noopener">Logs ↗</a>
+			} else {
+				<button class="btn btn-sm btn-outline btn-disabled" type="button" title={vm.AuthHint}>Logs ↗</button>
+			}
+
+			// Metrics
+			if vm.AuthStatus == "ok" && vm.MetricsURL1h != "" {
+				<a class="btn btn-sm btn-outline" href={vm.MetricsURL1h} target="_blank" rel="noopener">Metrics ↗</a>
+			} else {
+				<button class="btn btn-sm btn-outline btn-disabled" type="button" title={vm.AuthHint}>Metrics ↗</button>
+			}
+
+			// Console всегда можно открыть
+			if vm.ConsoleURL != "" {
+				<a class="btn btn-sm btn-ghost" href={vm.ConsoleURL} target="_blank" rel="noopener">Console ↗</a>
+			}
+
+			// <a
+			// 	class="btn btn-sm btn-outline"
+			// 	hx-get={"/services/" + vm.Name + "/explain"}
+			// 	hx-target="#explain-card"
+			// 	hx-swap="outerHTML"
+			// 	hx-indicator="#explain-card"
+			// 	hx-disabled-elt="this"
+			// >
+			// 	Explain
+			// </a>
+			<button
+				class="btn btn-sm btn-outline"
+				type="button"
+				data-explain-start
+				data-service-name={vm.Name}
+				>
+				Explain
+				</button>
+		</div>
+	</div>
+
+	if vm.Error != "" {
+		<div class="alert alert-error mt-6">
+			<span>{vm.Error}</span>
+		</div>
+	}
+
+	if vm.Error == "" {
+		<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+			<div class="card bg-base-100 shadow">
+				<div class="card-body">
+					<h2 class="card-title">Endpoint</h2>
+
+					<div class="text-sm mt-2">
+						<div class="text-base-content/60">URL</div>
+						if vm.URL != "" {
+							<a class="link break-all" href={vm.URL} target="_blank">{vm.URL}</a>
+						} else {
+							<span class="text-base-content/50">—</span>
+						}
+					</div>
+
+					<div class="text-sm mt-4">
+						<div class="text-base-content/60">Image</div>
+						if vm.Image != "" {
+							<div class="font-mono break-all">{vm.Image}</div>
+						} else {
+							<span class="text-base-content/50">—</span>
+						}
+					</div>
+				</div>
+			</div>
+
+			<div class="card bg-base-100 shadow">
+				<div class="card-body">
+					<h2 class="card-title">Conditions</h2>
+
+					if vm.Conditions == nil || len(vm.Conditions) == 0 {
+						<p class="text-sm text-base-content/70 mt-2">No conditions found.</p>
+					} else {
+						<div class="overflow-x-auto mt-2">
+							<table class="table">
+								<thead>
+									<tr>
+										<th>Type</th>
+										<th>State</th>
+									</tr>
+								</thead>
+								<tbody>
+									for _, c := range vm.Conditions {
+										<tr>
+											<td class="font-mono text-sm">{c.Type}</td>
+											<td>
+												if c.State == "CONDITION_SUCCEEDED" {
+													<span class="badge badge-success">SUCCEEDED</span>
+												} else if c.State == "CONDITION_FAILED" {
+													<span class="badge badge-error">FAILED</span>
+												} else {
+													<span class="badge badge-ghost">{c.State}</span>
+												}
+											</td>
+										</tr>
+									}
+								</tbody>
+							</table>
+						</div>
+					}
+				</div>
+			</div>
+			<div class="card bg-base-100 shadow mt-4">
+			// <div class="card-body">
+			// 	<div class="flex items-start justify-between gap-2">
+			// 	<h2 class="card-title">Explain</h2>
+
+			// 	if vm.ExplainText != "" {
+			// 		<a class="btn btn-xs btn-ghost" href={"/services/" + vm.Name}>
+			// 			Clear
+			// 		</a>
+			// 	}
+			// 	</div>
+
+			// 	if vm.ExplainText == "" {
+			// 	<p class="text-sm text-base-content/70">
+			// 		Click “Explain” to get a human-readable explanation of the current service conditions.
+			// 	</p>
+			// 	} else {
+			// 	<pre class="whitespace-pre-wrap text-sm">
+			// {vm.ExplainText}
+			// 	</pre>
+			// 	}
+			// </div>
+			@ExplainCard(vm)
+			</div>
+		</div>
+
+		<div class="card bg-base-100 shadow mt-4">
+			<div class="card-body">
+				<h2 class="card-title">Observability</h2>
+
+				<div class="flex flex-col gap-3 mt-2">
+					<div>
+						<div class="text-sm text-base-content/60 mb-2">Logs</div>
+						<div class="flex gap-2 flex-wrap">
+							<a class="btn btn-xs btn-outline" href={vm.LogsURL1h} target="_blank">Last 1h</a>
+							<a class="btn btn-xs btn-outline" href={vm.LogsURL6h} target="_blank">Last 6h</a>
+							<a class="btn btn-xs btn-outline" href={vm.LogsURL24h} target="_blank">Last 24h</a>
+							<a class="btn btn-xs btn-outline" href={vm.LogsURLErr} target="_blank">Errors (1h)</a>
+
+							<button
+								class="btn btn-xs btn-ghost"
+								type="button"
+								id="copy-logs-query"
+								data-query={vm.LogsQuery}
+							>
+								Copy query
+							</button>
+
+							<script>
+								document.addEventListener("click", async (e) => {
+								const btn = e.target.closest("#copy-logs-query");
+								if (!btn) return;
+								const q = btn.getAttribute("data-query") || "";
+								if (!q) return;
+
+								try {
+									await navigator.clipboard.writeText(q);
+									const prev = btn.textContent;
+									btn.textContent = "Copied ✓";
+									setTimeout(() => { btn.textContent = prev; }, 1500);
+								} catch (_) {
+									// fallback: do nothing
+								}
+								});
+							</script>
+						</div>
+					</div>
+
+					<div>
+						<div class="text-sm text-base-content/60 mb-2">Metrics</div>
+						<div class="flex gap-2 flex-wrap">
+							if vm.AuthStatus == "ok" {
+								<a class="btn btn-xs btn-outline" href={vm.LogsURL1h} target="_blank" rel="noopener">Last 1h</a>
+								<a class="btn btn-xs btn-outline" href={vm.LogsURL6h} target="_blank" rel="noopener">Last 6h</a>
+								<a class="btn btn-xs btn-outline" href={vm.LogsURL24h} target="_blank" rel="noopener">Last 24h</a>
+								<a class="btn btn-xs btn-outline" href={vm.LogsURLErr} target="_blank" rel="noopener">Errors (1h)</a>
+							} else {
+								<button class="btn btn-xs btn-outline btn-disabled" type="button" title={vm.AuthHint}>Last 1h</button>
+								<button class="btn btn-xs btn-outline btn-disabled" type="button" title={vm.AuthHint}>Last 6h</button>
+								<button class="btn btn-xs btn-outline btn-disabled" type="button" title={vm.AuthHint}>Last 24h</button>
+								<button class="btn btn-xs btn-outline btn-disabled" type="button" title={vm.AuthHint}>Errors (1h)</button>
+							}
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<div class="mt-4">
+			<a class="link" href="/services">← Back to services</a>
+		</div>
+
+		<div class="mt-6 text-xs text-base-content/50">
+			Rendered at { vm.Now.Format("2006-01-02 15:04:05") }
+		</div>
+	}
+</div>
+}
+
+templ ExplainCard(vm ServiceDetailVM) {
+	<div id="explain-card" class="card bg-base-100 shadow mt-4">
+		<div class="card-body">
+			<div id="explain-status" class="text-xs text-base-content/60"></div>
+			<div class="flex items-start justify-between gap-2">
+				<h2 class="card-title flex items-center gap-2">
+					Explain
+					<span id="explain-loading" class="loading loading-spinner loading-sm htmx-indicator"></span>
+				</h2>
+
+				if vm.Name != "" {
+					if vm.ExplainText != "" {
+						<a
+							class="btn btn-xs btn-ghost"
+							hx-get={"/services/" + vm.Name + "/explain?clear=1"}
+							hx-target="#explain-card"
+							hx-swap="outerHTML"
+						>
+							Clear
+						</a>
+					}
+				}
+			</div>
+
+			if vm.ExplainText == "" {
+				<p class="text-sm text-base-content/70" data-explain-hint>
+					Click “Explain” to get a human-readable explanation of the current service conditions.
+				</p>
+			} else {
+				<pre class="whitespace-pre-wrap text-sm">{vm.ExplainText}</pre>
+			}
+		</div>
+	</div>
+}

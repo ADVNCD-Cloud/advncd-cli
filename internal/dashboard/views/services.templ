@@ -1,0 +1,94 @@
+package views
+
+import (
+	"time"
+
+	"github.com/ADVNCD-Cloud/advncd-cli/internal/gcprun"
+)
+
+type ServicesListVM struct {
+	Error string
+
+	Project string
+	Region  string
+
+	Services []gcprun.Service
+
+	Now time.Time
+}
+
+templ ServicesList(vm ServicesListVM) {
+<div class="max-w-5xl">
+	<h1 class="text-2xl font-semibold">Services</h1>
+	<p class="text-base-content/70 mt-1">
+		Cloud Run services in {vm.Project} ({vm.Region})
+	</p>
+
+	if vm.Error != "" {
+		<div class="alert alert-error mt-6">
+			<span>{vm.Error}</span>
+		</div>
+	}
+
+	if vm.Error == "" {
+		<div class="overflow-x-auto mt-6">
+			<table class="table table-zebra">
+				<thead>
+					<tr>
+						<th>Name</th>
+						<th>Status</th>
+						<th>URL</th>
+						<th></th>
+					</tr>
+				</thead>
+				<tbody>
+					for _, s := range vm.Services {
+						<tr>
+							<td class="font-mono">{s.Name}</td>
+							<td>
+								if s.Status == "READY" {
+									<span class="badge badge-success">READY</span>
+								} else if s.Status == "ERROR" {
+									<span class="badge badge-error">ERROR</span>
+								} else {
+									<span class="badge badge-ghost">UNKNOWN</span>
+								}
+							</td>
+							<td class="truncate max-w-xs">
+								if s.URL != "" {
+									<a class="link" href={s.URL} target="_blank">
+										{s.URL}
+									</a>
+								} else {
+									<span class="text-base-content/50">—</span>
+								}
+							</td>
+							<td class="text-right space-x-2">
+								if s.URL != "" {
+									<a
+										class="btn btn-sm"
+										href={s.URL}
+										target="_blank"
+									>
+										Open
+									</a>
+								}
+								<a
+									class="btn btn-sm btn-ghost"
+									href={"/services/" + s.Name}
+								>
+									Describe
+								</a>
+							</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+
+		<div class="mt-4 text-xs text-base-content/50">
+			Rendered at { vm.Now.Format("2006-01-02 15:04:05") }
+		</div>
+	}
+</div>
+}
