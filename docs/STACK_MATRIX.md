@@ -44,4 +44,5 @@ This matrix describes stack auto-detection currently implemented by `advncd publ
 Notes:
 - Detection is heuristic and uses project-root markers.
 - Build path is currently Buildpacks-based (`build_method: buildpacks`).
+- `publish scan` auto-fills `env_file` when found in root: `.env.production` -> `.env.prod` -> `.env`.
 - If no plan file exists, `advncd publish` starts a setup wizard and writes `advncd.deploy.yaml`.

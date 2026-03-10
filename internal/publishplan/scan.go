@@ -30,6 +30,7 @@ func Scan(root string) (Plan, error) {
 	service := projectslug.FromPathBase(root)
 	plan := NewDefaults(service)
 	plan.Stack = stack
+	plan.EnvFile = detectEnvFile(root)
 
 	_, defaultEnv := StackDefaults(stack)
 	plan.Env = MergeEnv(plan.Env, defaultEnv)
@@ -84,6 +85,20 @@ func detectStack(root string) string {
 		return StackRuby
 	}
 	return StackUnknown
+}
+
+func detectEnvFile(root string) string {
+	candidates := []string{
+		".env.production",
+		".env.prod",
+		".env",
+	}
+	for _, name := range candidates {
+		if fileExists(filepath.Join(root, name)) {
+			return name
+		}
+	}
+	return ""
 }
 
 func detectFrontendStack(pkg packageManifest, hasPackage bool) string {

@@ -51,7 +51,7 @@ var publishScanCmd = &cobra.Command{
 func init() {
 	publishCmd.PersistentFlags().StringVar(&publishPlanPath, "plan", publishplan.DefaultFileName, "Path to deploy plan YAML")
 	publishCmd.PersistentFlags().StringVar(&publishName, "name", "", "Cloud Run service name override")
-	publishCmd.PersistentFlags().StringVar(&publishEnvFile, "env-file", "", "Path to dotenv file with runtime env vars override")
+	publishCmd.PersistentFlags().StringVar(&publishEnvFile, "env-file", "", "Path to dotenv file (deploy runtime override; scan writes it to plan env_file)")
 	publishCmd.PersistentFlags().StringArrayVar(&publishEnv, "env", nil, "Runtime env var override/addition (KEY=VALUE), repeatable")
 
 	publishScanCmd.Flags().BoolVar(&publishScanForce, "force", false, "Overwrite existing plan file")
@@ -80,6 +80,9 @@ func runPublishScan(cmd *cobra.Command, args []string) error {
 	if strings.TrimSpace(publishName) != "" {
 		plan.Service = strings.TrimSpace(publishName)
 	}
+	if strings.TrimSpace(publishEnvFile) != "" {
+		plan.EnvFile = strings.TrimSpace(publishEnvFile)
+	}
 	plan, err = publishplan.Normalize(plan)
 	if err != nil {
 		return err
@@ -93,6 +96,9 @@ func runPublishScan(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  stack: %s\n", plan.Stack)
 	fmt.Printf("  service: %s\n", plan.Service)
 	fmt.Printf("  port: %d\n", plan.Port)
+	if plan.EnvFile != "" {
+		fmt.Printf("  env_file: %s\n", plan.EnvFile)
+	}
 	return nil
 }
 

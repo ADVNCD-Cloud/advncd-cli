@@ -129,3 +129,46 @@ func TestScan_DefaultEnvForNodeLikeStack(t *testing.T) {
 		t.Fatalf("missing NODE_ENV default")
 	}
 }
+
+func TestScan_AutoDetectsEnvFile(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte(`{"dependencies":{"next":"14.0.0"}}`), 0o644); err != nil {
+		t.Fatalf("write package.json: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".env.production"), []byte("A=1\n"), 0o644); err != nil {
+		t.Fatalf("write .env.production: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".env"), []byte("B=2\n"), 0o644); err != nil {
+		t.Fatalf("write .env: %v", err)
+	}
+
+	p, err := Scan(dir)
+	if err != nil {
+		t.Fatalf("Scan error: %v", err)
+	}
+	if p.EnvFile != ".env.production" {
+		t.Fatalf("env_file mismatch: got %q want %q", p.EnvFile, ".env.production")
+	}
+}
+
+func TestScan_AutoDetectsDotEnvFallback(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module x\n"), 0o644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".env"), []byte("A=1\n"), 0o644); err != nil {
+		t.Fatalf("write .env: %v", err)
+	}
+
+	p, err := Scan(dir)
+	if err != nil {
+		t.Fatalf("Scan error: %v", err)
+	}
+	if p.EnvFile != ".env" {
+		t.Fatalf("env_file mismatch: got %q want %q", p.EnvFile, ".env")
+	}
+}

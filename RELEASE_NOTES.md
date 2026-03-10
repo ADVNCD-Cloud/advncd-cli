@@ -18,6 +18,7 @@
   - Others: .NET, Rails/Sinatra, Laravel/Symfony, Rust, Elixir
 - Deploy plan model with configurable service/image repo/port/memory/min-instances/public access/env/env-file.
 - Stack support matrix document: `docs/STACK_MATRIX.md`.
+- `publish scan` now auto-detects `env_file` from project root (`.env.production` -> `.env.prod` -> `.env`) and supports explicit override via `--env-file`.
 
 ### Changed
 

@@ -171,11 +171,15 @@ Requirements:
 Flags:
 - `--plan`: path to deploy plan YAML (default `advncd.deploy.yaml`).
 - `--name`: Cloud Run service name override.
-- `--env-file`: dotenv file with runtime variables.
+- `--env-file`: dotenv file with runtime variables (overrides `env_file` from plan at deploy time; also can be used with `publish scan` to set plan `env_file`).
 - `--env`: extra `KEY=VALUE` values (repeatable). Overrides plan env and `--env-file`.
 
 #### `advncd publish scan`
 Scan current project and generate `advncd.deploy.yaml`.
+
+`env_file` behavior:
+- Auto-detects `env_file` from project root with priority: `.env.production` -> `.env.prod` -> `.env`.
+- You can force plan value: `advncd publish scan --env-file .env.staging`.
 
 Auto-detects stack heuristically:
 - Frontend SSR: Next.js, Nuxt, SvelteKit, Remix, Astro, Angular SSR
@@ -197,6 +201,7 @@ Examples:
 ./advncd publish
 ./advncd publish --plan ./deploy/prod.yaml
 ./advncd publish scan --force --name api
+./advncd publish scan --force --env-file .env.staging
 ./advncd publish --env-file .env.production
 ./advncd publish --env FOO=bar --env LOG_LEVEL=info
 ```
