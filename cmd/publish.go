@@ -2,9 +2,11 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -17,171 +19,412 @@ import (
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/gcpartifact"
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/gcprun"
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/projectslug"
+	"github.com/ADVNCD-Cloud/advncd-cli/internal/publishplan"
 )
 
 var (
-	publishName    string
-	publishEnvFile string
-	publishEnv     []string
+	publishName      string
+	publishEnvFile   string
+	publishEnv       []string
+	publishPlanPath  string
+	publishScanForce bool
 )
 
 var publishCmd = &cobra.Command{
 	Use:   "publish",
-	Short: "Build and deploy the current Go app to Cloud Run",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
-		defer cancel()
+	Short: "Build and deploy the current app to Cloud Run",
+	RunE:  runPublishDeploy,
+}
 
-		// Auth (valid token)
-		tb, err := auth.GetAccessToken(ctx)
-		if err != nil {
-			return err
-		}
+var publishDeployCmd = &cobra.Command{
+	Use:   "deploy",
+	Short: "Deploy app to Cloud Run using deploy YAML",
+	RunE:  runPublishDeploy,
+}
 
-		// Config (project/region)
-		cfgStore, err := config.DefaultStore()
-		if err != nil {
-			return err
-		}
-		cfg, err := cfgStore.Load()
-		if err != nil {
-			return err
-		}
-		if cfg == nil || cfg.ProjectID == "" || cfg.Region == "" {
-			fmt.Println("config: not set")
-			fmt.Println("fix: run `advncd init`")
-			return nil
-		}
-
-		// Project root = current directory (MVP)
-		wd, err := os.Getwd()
-		if err != nil {
-			return err
-		}
-
-		// C0: require go.mod
-		if _, err := os.Stat(filepath.Join(wd, "go.mod")); err != nil {
-			fmt.Println("Not a Go module (go.mod not found in current directory).")
-			fmt.Println("fix: run `advncd publish` from your Go project root (where go.mod is).")
-			return nil
-		}
-
-		// Service name = folder slug by default, can override with --name
-		svc := publishName
-		if svc == "" {
-			svc = projectslug.FromPathBase(wd)
-		} else {
-			svc = projectslug.Slugify(svc)
-		}
-		if svc == "" {
-			fmt.Println("Unable to determine service name.")
-			fmt.Println("fix: run `advncd publish --name <service>`")
-			return nil
-		}
-		envVars, err := buildPublishEnv(publishEnvFile, publishEnv)
-		if err != nil {
-			return err
-		}
-
-		// Artifact Registry image
-		// Use unique tag per publish so Cloud Run always creates a new revision.
-		repo := "advncd"
-		image := buildPublishImage(cfg.Region, cfg.ProjectID, repo, svc, time.Now())
-
-		fmt.Println("publish:")
-		fmt.Printf("  project: %s\n", cfg.ProjectID)
-		fmt.Printf("  region:  %s\n", cfg.Region)
-		fmt.Printf("  service: %s\n", svc)
-		fmt.Printf("  image:   %s\n", image)
-		if len(envVars) > 0 {
-			fmt.Printf("  env:     %d vars\n", len(envVars))
-		}
-		fmt.Println()
-
-		// 1) Build & push container via Cloud Build (Buildpacks)
-		fmt.Println("Ensuring Artifact Registry repo exists...")
-		if err := gcpartifact.EnsureDockerRepo(ctx, tb.AccessToken, cfg.ProjectID, cfg.Region, "advncd"); err != nil {
-			return err
-		}
-		fmt.Println("Building (Cloud Build + Buildpacks)...")
-		build, err := cloudbuild.SubmitBuildpacksBuild(ctx, cloudbuild.SubmitRequest{
-			AccessToken: tb.AccessToken,
-			ProjectID:   cfg.ProjectID,
-			SourceDir:   wd,
-			Image:       image,
-		})
-		if err != nil {
-			return err
-		}
-
-		fmt.Printf("✓ Build submitted: %s\n", build.ID)
-		if build.LogURL != "" {
-			fmt.Printf("  logs: %s\n", build.LogURL)
-		}
-
-		fmt.Println("Waiting for build to complete...")
-		final, err := cloudbuild.WaitBuild(ctx, cloudbuild.WaitRequest{
-			AccessToken: tb.AccessToken,
-			ProjectID:   cfg.ProjectID,
-			Region:      cfg.Region,
-			BuildID:     build.ID,
-			PollEvery:   3 * time.Second,
-		})
-		if err != nil {
-			return err
-		}
-
-		if final.Status != "SUCCESS" {
-			fmt.Println("Build did not succeed.")
-			fmt.Printf("status: %s\n", final.Status)
-			if final.LogURL != "" {
-				fmt.Printf("logs: %s\n", final.LogURL)
-			}
-			fmt.Println("fix: open build logs and check buildpack detection / Go entrypoint.")
-			fmt.Println("fix: ensure your app listens on $PORT (Cloud Run requirement).")
-			fmt.Println("fix: ensure Artifact Registry repo exists: advncd")
-			return nil
-		}
-
-		fmt.Println("✓ Build completed")
-
-		// 2) Deploy to Cloud Run (create or update)
-		fmt.Println("Deploying to Cloud Run...")
-		deployed, err := gcprun.DeployService(ctx, gcprun.DeployRequest{
-			AccessToken: tb.AccessToken,
-			ProjectID:   cfg.ProjectID,
-			Region:      cfg.Region,
-			ServiceName: svc,
-			Image:       image,
-			Env:         envVars,
-		})
-		if err != nil {
-			return err
-		}
-
-		fmt.Println("✓ Service deployed")
-		fmt.Println("Allowing unauthenticated access...")
-		if err := gcprun.AllowUnauthenticated(ctx, tb.AccessToken, cfg.ProjectID, cfg.Region, svc); err != nil {
-			return err
-		}
-		fmt.Println("✓ Public access enabled")
-		if deployed.URL != "" {
-			fmt.Println()
-			fmt.Printf("URL: %s\n", deployed.URL)
-		} else {
-			fmt.Println()
-			fmt.Println("URL: (not returned)")
-			fmt.Println("fix: open Cloud Run console to find the service URL.")
-		}
-
-		return nil
-	},
+var publishScanCmd = &cobra.Command{
+	Use:   "scan",
+	Short: "Scan project and generate deploy YAML",
+	RunE:  runPublishScan,
 }
 
 func init() {
-	publishCmd.Flags().StringVar(&publishName, "name", "", "Cloud Run service name (defaults to current folder name)")
-	publishCmd.Flags().StringVar(&publishEnvFile, "env-file", "", "Path to dotenv file with runtime env vars")
-	publishCmd.Flags().StringArrayVar(&publishEnv, "env", nil, "Runtime env var override/addition (KEY=VALUE), repeatable")
+	publishCmd.PersistentFlags().StringVar(&publishPlanPath, "plan", publishplan.DefaultFileName, "Path to deploy plan YAML")
+	publishCmd.PersistentFlags().StringVar(&publishName, "name", "", "Cloud Run service name override")
+	publishCmd.PersistentFlags().StringVar(&publishEnvFile, "env-file", "", "Path to dotenv file with runtime env vars override")
+	publishCmd.PersistentFlags().StringArrayVar(&publishEnv, "env", nil, "Runtime env var override/addition (KEY=VALUE), repeatable")
+
+	publishScanCmd.Flags().BoolVar(&publishScanForce, "force", false, "Overwrite existing plan file")
+
+	publishCmd.AddCommand(publishDeployCmd)
+	publishCmd.AddCommand(publishScanCmd)
+}
+
+func runPublishScan(cmd *cobra.Command, args []string) error {
+	wd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+
+	planPath := resolvePlanPath(wd, publishPlanPath)
+	if !publishScanForce {
+		if _, err := os.Stat(planPath); err == nil {
+			return fmt.Errorf("plan file already exists: %s (use --force to overwrite)", planPath)
+		}
+	}
+
+	plan, err := publishplan.Scan(wd)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(publishName) != "" {
+		plan.Service = strings.TrimSpace(publishName)
+	}
+	plan, err = publishplan.Normalize(plan)
+	if err != nil {
+		return err
+	}
+
+	if err := publishplan.WriteFile(planPath, plan); err != nil {
+		return err
+	}
+
+	fmt.Printf("✓ Deploy plan written: %s\n", planPath)
+	fmt.Printf("  stack: %s\n", plan.Stack)
+	fmt.Printf("  service: %s\n", plan.Service)
+	fmt.Printf("  port: %d\n", plan.Port)
+	return nil
+}
+
+func runPublishDeploy(cmd *cobra.Command, args []string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	defer cancel()
+
+	tb, err := auth.GetAccessToken(ctx)
+	if err != nil {
+		return err
+	}
+
+	cfgStore, err := config.DefaultStore()
+	if err != nil {
+		return err
+	}
+	cfg, err := cfgStore.Load()
+	if err != nil {
+		return err
+	}
+	if cfg == nil || cfg.ProjectID == "" || cfg.Region == "" {
+		fmt.Println("config: not set")
+		fmt.Println("fix: run `advncd init`")
+		return nil
+	}
+
+	wd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+
+	planPath := resolvePlanPath(wd, publishPlanPath)
+	plan, err := loadOrCreatePlanWithWizard(wd, planPath)
+	if err != nil {
+		return err
+	}
+
+	plan, err = applyPublishOverrides(plan)
+	if err != nil {
+		return err
+	}
+
+	sourceDir := plan.SourceDir
+	if !filepath.IsAbs(sourceDir) {
+		sourceDir = filepath.Join(wd, sourceDir)
+	}
+	if st, err := os.Stat(sourceDir); err != nil || !st.IsDir() {
+		return fmt.Errorf("source_dir does not exist or is not a directory: %s", sourceDir)
+	}
+
+	envFromFileAndArgs, err := buildPublishEnv(plan.EnvFile, publishEnv)
+	if err != nil {
+		return err
+	}
+	envVars := mergeStringMap(plan.Env, envFromFileAndArgs)
+
+	repo := plan.ImageRepo
+	image := buildPublishImage(cfg.Region, cfg.ProjectID, repo, plan.Service, time.Now())
+
+	fmt.Println("publish:")
+	fmt.Printf("  project: %s\n", cfg.ProjectID)
+	fmt.Printf("  region:  %s\n", cfg.Region)
+	fmt.Printf("  service: %s\n", plan.Service)
+	fmt.Printf("  stack:   %s\n", plan.Stack)
+	fmt.Printf("  source:  %s\n", sourceDir)
+	fmt.Printf("  image:   %s\n", image)
+	if len(envVars) > 0 {
+		fmt.Printf("  env:     %d vars\n", len(envVars))
+	}
+	fmt.Println()
+
+	fmt.Printf("Ensuring Artifact Registry repo %q exists...\n", repo)
+	if err := gcpartifact.EnsureDockerRepo(ctx, tb.AccessToken, cfg.ProjectID, cfg.Region, repo); err != nil {
+		return err
+	}
+
+	switch plan.BuildMethod {
+	case publishplan.BuildMethodBuildpacks:
+		fmt.Println("Building (Cloud Build + Buildpacks)...")
+	default:
+		return fmt.Errorf("unsupported build_method %q", plan.BuildMethod)
+	}
+
+	build, err := cloudbuild.SubmitBuildpacksBuild(ctx, cloudbuild.SubmitRequest{
+		AccessToken: tb.AccessToken,
+		ProjectID:   cfg.ProjectID,
+		SourceDir:   sourceDir,
+		Image:       image,
+	})
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("✓ Build submitted: %s\n", build.ID)
+	if build.LogURL != "" {
+		fmt.Printf("  logs: %s\n", build.LogURL)
+	}
+
+	fmt.Println("Waiting for build to complete...")
+	final, err := cloudbuild.WaitBuild(ctx, cloudbuild.WaitRequest{
+		AccessToken: tb.AccessToken,
+		ProjectID:   cfg.ProjectID,
+		Region:      cfg.Region,
+		BuildID:     build.ID,
+		PollEvery:   3 * time.Second,
+	})
+	if err != nil {
+		return err
+	}
+
+	if final.Status != "SUCCESS" {
+		fmt.Println("Build did not succeed.")
+		fmt.Printf("status: %s\n", final.Status)
+		if final.LogURL != "" {
+			fmt.Printf("logs: %s\n", final.LogURL)
+		}
+		fmt.Println("fix: open build logs and check buildpack detection / start command.")
+		fmt.Println("fix: ensure your app listens on $PORT (Cloud Run requirement).")
+		fmt.Printf("fix: ensure Artifact Registry repo exists: %s\n", repo)
+		return nil
+	}
+
+	fmt.Println("✓ Build completed")
+	fmt.Println("Deploying to Cloud Run...")
+
+	deployReq := gcprun.DeployRequest{
+		AccessToken:   tb.AccessToken,
+		ProjectID:     cfg.ProjectID,
+		Region:        cfg.Region,
+		ServiceName:   plan.Service,
+		Image:         image,
+		Env:           envVars,
+		ContainerPort: plan.Port,
+		Memory:        plan.Memory,
+		MinInstances:  plan.MinInstances,
+	}
+	deployed, err := gcprun.DeployService(ctx, deployReq)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("✓ Service deployed")
+	if plan.AllowUnauthenticated {
+		fmt.Println("Allowing unauthenticated access...")
+		if err := gcprun.AllowUnauthenticated(ctx, tb.AccessToken, cfg.ProjectID, cfg.Region, plan.Service); err != nil {
+			return err
+		}
+		fmt.Println("✓ Public access enabled")
+	}
+
+	fmt.Println()
+	if deployed.URL != "" {
+		fmt.Printf("URL: %s\n", deployed.URL)
+	} else {
+		fmt.Println("URL: (not returned)")
+		fmt.Println("fix: open Cloud Run console to find the service URL.")
+	}
+
+	return nil
+}
+
+func loadOrCreatePlanWithWizard(wd, planPath string) (publishplan.Plan, error) {
+	plan, err := publishplan.ReadFile(planPath)
+	if err == nil {
+		return plan, nil
+	}
+	if !errors.Is(err, os.ErrNotExist) {
+		return publishplan.Plan{}, err
+	}
+
+	fmt.Printf("Deploy plan not found: %s\n", planPath)
+	ok, err := promptYesNo("Run setup wizard to create it now?", true)
+	if err != nil {
+		return publishplan.Plan{}, err
+	}
+	if !ok {
+		return publishplan.Plan{}, fmt.Errorf("deploy cancelled: plan file is required")
+	}
+
+	scanned, scanErr := publishplan.Scan(wd)
+	if scanErr != nil {
+		scanned = publishplan.NewDefaults(projectslug.FromPathBase(wd))
+	}
+
+	wizardPlan, err := runPublishWizard(scanned)
+	if err != nil {
+		return publishplan.Plan{}, err
+	}
+	if err := publishplan.WriteFile(planPath, wizardPlan); err != nil {
+		return publishplan.Plan{}, err
+	}
+	fmt.Printf("✓ Deploy plan created: %s\n", planPath)
+	return wizardPlan, nil
+}
+
+func runPublishWizard(seed publishplan.Plan) (publishplan.Plan, error) {
+	service, err := promptDefaultLine("Service name", seed.Service)
+	if err != nil {
+		return publishplan.Plan{}, err
+	}
+
+	stack, err := promptDefaultLine(
+		fmt.Sprintf("Stack (%s)", strings.Join(publishplan.SupportedStacks(), "/")),
+		seed.Stack,
+	)
+	if err != nil {
+		return publishplan.Plan{}, err
+	}
+	stack = strings.ToLower(strings.TrimSpace(stack))
+	if stack == "" {
+		stack = publishplan.StackUnknown
+	}
+
+	defaultPort, defaultEnv := publishplan.StackDefaults(stack)
+	portDefault := seed.Port
+	if portDefault <= 0 {
+		portDefault = defaultPort
+	}
+	portStr, err := promptDefaultLine("Container port", strconv.Itoa(portDefault))
+	if err != nil {
+		return publishplan.Plan{}, err
+	}
+	port, err := strconv.Atoi(strings.TrimSpace(portStr))
+	if err != nil {
+		return publishplan.Plan{}, fmt.Errorf("invalid port %q", portStr)
+	}
+
+	memory, err := promptDefaultLine("Memory limit (blank to keep default)", seed.Memory)
+	if err != nil {
+		return publishplan.Plan{}, err
+	}
+
+	envFile, err := promptDefaultLine("env_file path (blank to skip)", seed.EnvFile)
+	if err != nil {
+		return publishplan.Plan{}, err
+	}
+
+	allowPublic, err := promptYesNo("Allow unauthenticated access?", true)
+	if err != nil {
+		return publishplan.Plan{}, err
+	}
+
+	minInstances, err := promptOptionalInt("Min instances (-1 to skip)", seed.MinInstances)
+	if err != nil {
+		return publishplan.Plan{}, err
+	}
+
+	env := mergeStringMap(defaultEnv, seed.Env)
+	for {
+		pair, err := promptLine("Extra env KEY=VALUE (empty to finish)")
+		if err != nil {
+			return publishplan.Plan{}, err
+		}
+		pair = strings.TrimSpace(pair)
+		if pair == "" {
+			break
+		}
+		i := strings.Index(pair, "=")
+		if i <= 0 {
+			fmt.Println("Invalid format. Use KEY=VALUE.")
+			continue
+		}
+		k := strings.TrimSpace(pair[:i])
+		v := pair[i+1:]
+		if k == "" {
+			fmt.Println("Invalid format. Key cannot be empty.")
+			continue
+		}
+		env[k] = v
+	}
+
+	plan := publishplan.Plan{
+		Version:              publishplan.Version,
+		Service:              service,
+		Stack:                stack,
+		SourceDir:            seed.SourceDir,
+		BuildMethod:          publishplan.BuildMethodBuildpacks,
+		ImageRepo:            seed.ImageRepo,
+		Port:                 port,
+		Memory:               strings.TrimSpace(memory),
+		MinInstances:         minInstances,
+		AllowUnauthenticated: allowPublic,
+		EnvFile:              strings.TrimSpace(envFile),
+		Env:                  env,
+	}
+
+	return publishplan.Normalize(plan)
+}
+
+func applyPublishOverrides(plan publishplan.Plan) (publishplan.Plan, error) {
+	out := plan
+	if strings.TrimSpace(publishName) != "" {
+		out.Service = strings.TrimSpace(publishName)
+	}
+	if strings.TrimSpace(publishEnvFile) != "" {
+		out.EnvFile = strings.TrimSpace(publishEnvFile)
+	}
+	return publishplan.Normalize(out)
+}
+
+func promptDefaultLine(question, def string) (string, error) {
+	def = strings.TrimSpace(def)
+	if def == "" {
+		return promptLine(question)
+	}
+	s, err := promptLine(fmt.Sprintf("%s [%s]", question, def))
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(s) == "" {
+		return def, nil
+	}
+	return strings.TrimSpace(s), nil
+}
+
+func promptOptionalInt(question string, def *int) (*int, error) {
+	defText := "-1"
+	if def != nil {
+		defText = strconv.Itoa(*def)
+	}
+	s, err := promptDefaultLine(question, defText)
+	if err != nil {
+		return nil, err
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(s))
+	if err != nil {
+		return nil, fmt.Errorf("invalid number %q", s)
+	}
+	if n < 0 {
+		return nil, nil
+	}
+	return &n, nil
 }
 
 func buildPublishEnv(envFile string, envArgs []string) (map[string]string, error) {
@@ -222,4 +465,26 @@ func buildPublishEnv(envFile string, envArgs []string) (map[string]string, error
 func buildPublishImage(region, projectID, repo, service string, now time.Time) string {
 	deployTag := now.UTC().Format("20060102-150405")
 	return fmt.Sprintf("%s-docker.pkg.dev/%s/%s/%s:%s", region, projectID, repo, service, deployTag)
+}
+
+func resolvePlanPath(wd, planFlag string) string {
+	path := strings.TrimSpace(planFlag)
+	if path == "" {
+		path = publishplan.DefaultFileName
+	}
+	if filepath.IsAbs(path) {
+		return path
+	}
+	return filepath.Join(wd, path)
+}
+
+func mergeStringMap(base, overlay map[string]string) map[string]string {
+	out := map[string]string{}
+	for k, v := range base {
+		out[k] = v
+	}
+	for k, v := range overlay {
+		out[k] = v
+	}
+	return out
 }

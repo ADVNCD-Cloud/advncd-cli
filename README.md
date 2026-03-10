@@ -57,9 +57,10 @@ export ADVNCD_GCP_CLIENT_SECRET="YOUR_CLIENT_SECRET" # optional for some clients
 ./advncd init
 ```
 
-4. Deploy your Go app (run from a folder that contains `go.mod`):
+4. Generate deploy plan and deploy your app (any stack supported by Buildpacks):
 
 ```bash
+./advncd publish scan
 ./advncd publish
 ```
 
@@ -158,24 +159,44 @@ Example:
 ./advncd projects delete my-old-project --yes
 ```
 
-### Deploy Go Services
+### Deploy Services (Any Buildpacks Stack)
 
 #### `advncd publish`
-Build and deploy current Go module to Cloud Run.
+Build and deploy current app to Cloud Run using `advncd.deploy.yaml`.
 
 Requirements:
-- Run command from a directory that contains `go.mod`.
 - Project and region must be set (`advncd init`).
+- If `advncd.deploy.yaml` is missing, CLI starts a setup wizard and creates it.
 
 Flags:
-- `--name`: Cloud Run service name. Defaults to current folder slug.
+- `--plan`: path to deploy plan YAML (default `advncd.deploy.yaml`).
+- `--name`: Cloud Run service name override.
 - `--env-file`: dotenv file with runtime variables.
-- `--env`: extra `KEY=VALUE` values (repeatable). Overrides values from `--env-file`.
+- `--env`: extra `KEY=VALUE` values (repeatable). Overrides plan env and `--env-file`.
+
+#### `advncd publish scan`
+Scan current project and generate `advncd.deploy.yaml`.
+
+Auto-detects stack heuristically:
+- Frontend SSR: Next.js, Nuxt, SvelteKit, Remix, Astro, Angular SSR
+- Frontend SPA: Vite-based apps
+- Node backends: NestJS, Express, Fastify, Koa, Hono
+- Python backends: FastAPI, Flask, Django
+- Go backends: Gin, Echo, Fiber
+- JVM backends: Spring Boot, Quarkus, Micronaut, Ktor
+- Others: .NET, Rails/Sinatra, Laravel/Symfony, Rust, Elixir
+- Fallbacks: node/python/java/php/ruby/unknown
+
+Full matrix with detection markers:
+- [`docs/STACK_MATRIX.md`](docs/STACK_MATRIX.md)
 
 Examples:
 
 ```bash
-./advncd publish --name api
+./advncd publish scan
+./advncd publish
+./advncd publish --plan ./deploy/prod.yaml
+./advncd publish scan --force --name api
 ./advncd publish --env-file .env.production
 ./advncd publish --env FOO=bar --env LOG_LEVEL=info
 ```
