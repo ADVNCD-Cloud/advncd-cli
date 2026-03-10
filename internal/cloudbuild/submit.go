@@ -42,6 +42,8 @@ type opResp struct {
 	} `json:"metadata"`
 }
 
+const defaultBuilderImage = "gcr.io/buildpacks/builder:google-22"
+
 func SubmitBuildpacksBuild(ctx context.Context, req SubmitRequest) (*Build, error) {
 	// 1) archive source
 	tgz, err := TarGzBytes(req.SourceDir)
@@ -113,7 +115,7 @@ func SubmitBuildpacksBuild(ctx context.Context, req SubmitRequest) (*Build, erro
 		Name: "gcr.io/k8s-skaffold/pack",
 		Args: []string{
 			"build", req.Image,
-			"--builder", "gcr.io/buildpacks/builder:v1",
+			"--builder", defaultBuilderImage,
 			"--path", ".",
 			"--publish",
 		},

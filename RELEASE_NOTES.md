@@ -1,5 +1,30 @@
 # Release Notes
 
+## 0.2.0 - 2026-03-10
+
+### Added
+
+- Two-step publish workflow:
+  - `advncd publish scan` scans project stack and generates `advncd.deploy.yaml`
+  - `advncd publish` / `advncd publish deploy` deploy using that YAML
+- Deploy wizard fallback when `advncd.deploy.yaml` is missing.
+- Expanded stack detection heuristics for modern frontend/backend ecosystems:
+  - Frontend SSR: Next.js, Nuxt, SvelteKit, Remix, Astro, Angular SSR
+  - Frontend SPA: Vite-based apps
+  - Backend Node: NestJS, Express, Fastify, Koa, Hono
+  - Backend Python: FastAPI, Flask, Django
+  - Backend Go: Gin, Echo, Fiber
+  - Backend JVM: Spring Boot, Quarkus, Micronaut, Ktor
+  - Others: .NET, Rails/Sinatra, Laravel/Symfony, Rust, Elixir
+- Deploy plan model with configurable service/image repo/port/memory/min-instances/public access/env/env-file.
+- Stack support matrix document: `docs/STACK_MATRIX.md`.
+- `publish scan` now auto-detects `env_file` from project root (`.env.production` -> `.env.prod` -> `.env`) and supports explicit override via `--env-file`.
+
+### Changed
+
+- `advncd publish` is no longer Go-only; deploy path now works from YAML and Buildpacks for any detected stack.
+- Cloud Build builder image switched from deprecated `gcr.io/buildpacks/builder:v1` to `gcr.io/buildpacks/builder:google-22`.
+
 ## 0.1.0 - 2026-03-10
 
 Initial public release of Advncd CLI focused on practical Google Cloud Run workflows and one-command n8n hosting.
