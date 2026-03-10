@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/apperr"
@@ -38,7 +39,10 @@ func GetAccessToken(ctx context.Context) (*TokenBundle, error) {
 			WithFix("Run: advncd login")
 	}
 
-	clientSecret := os.Getenv("ADVNCD_GCP_CLIENT_SECRET")
+	clientSecret := strings.TrimSpace(os.Getenv("ADVNCD_GCP_CLIENT_SECRET"))
+	if clientSecret == "" {
+		clientSecret = strings.TrimSpace(c.ClientSecret)
+	}
 
 	// Refresh if expiring soon (skew 30s)
 	if time.Until(c.Expiry) < 30*time.Second {

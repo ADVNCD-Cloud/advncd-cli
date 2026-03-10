@@ -18,6 +18,7 @@ type ServiceDetail struct {
 	Name       string
 	URL        string
 	Image      string
+	Env        map[string]string
 	Conditions []Condition
 }
 
@@ -25,9 +26,13 @@ type getResp struct {
 	Name       string      `json:"name"`
 	URI        string      `json:"uri,omitempty"`
 	Conditions []Condition `json:"conditions,omitempty"`
-	Template struct {
+	Template   struct {
 		Containers []struct {
 			Image string `json:"image"`
+			Env   []struct {
+				Name  string `json:"name"`
+				Value string `json:"value,omitempty"`
+			} `json:"env,omitempty"`
 		} `json:"containers,omitempty"`
 	} `json:"template,omitempty"`
 }
@@ -57,6 +62,7 @@ func GetService(ctx context.Context, accessToken, projectID, region, serviceName
 
 	if res.StatusCode == 404 {
 		return nil, apperr.New(ErrRunGetService).
+			WithMeta("http_status", res.Status).
 			WithMeta("service", serviceName).
 			WithFix("Service not found in this project/region. Run: advncd services")
 	}
@@ -74,14 +80,22 @@ func GetService(ctx context.Context, accessToken, projectID, region, serviceName
 	}
 
 	img := ""
+	env := map[string]string{}
 	if len(out.Template.Containers) > 0 {
 		img = out.Template.Containers[0].Image
+		for _, v := range out.Template.Containers[0].Env {
+			if strings.TrimSpace(v.Name) == "" {
+				continue
+			}
+			env[v.Name] = v.Value
+		}
 	}
 
 	return &ServiceDetail{
 		Name:       shortNameOr(serviceName, out.Name),
 		URL:        out.URI,
 		Image:      img,
+		Env:        env,
 		Conditions: out.Conditions,
 	}, nil
 }

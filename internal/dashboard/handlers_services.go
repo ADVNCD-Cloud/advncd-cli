@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/ADVNCD-Cloud/advncd-cli/internal/auth"
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/config"
-	"github.com/ADVNCD-Cloud/advncd-cli/internal/creds"
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/dashboard/views"
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/gcprun"
 )
@@ -20,7 +20,7 @@ func servicesListHandler(w http.ResponseWriter, r *http.Request) {
 			},
 			views.ServicesList(vm),
 		).
-		Render(r.Context(), w)
+			Render(r.Context(), w)
 	}
 
 	// Load config
@@ -32,25 +32,16 @@ func servicesListHandler(w http.ResponseWriter, r *http.Request) {
 	cfg, err := cfgStore.Load()
 	if err != nil || cfg == nil || cfg.ProjectID == "" || cfg.Region == "" {
 		render(views.ServicesListVM{
-			Error:   "Project not initialized. Run: advncd init",
-			Now:     time.Now(),
+			Error: "Project not initialized. Run: advncd init",
+			Now:   time.Now(),
 		})
 		return
 	}
 
-	// Load creds
-	credStore, err := creds.DefaultStore()
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+	tb, err := auth.GetAccessToken(ctx)
 	if err != nil {
-		render(views.ServicesListVM{
-			Error:   "Failed to init creds store: " + err.Error(),
-			Project: cfg.ProjectID,
-			Region:  cfg.Region,
-			Now:     time.Now(),
-		})
-		return
-	}
-	cr, err := credStore.Load()
-	if err != nil || cr == nil || cr.AccessToken == "" {
 		render(views.ServicesListVM{
 			Error:   "Not authenticated. Run: advncd login",
 			Project: cfg.ProjectID,
@@ -60,13 +51,7 @@ func servicesListHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Call existing Cloud Run logic (ВАЖНО: порядок аргументов)
-	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
-	defer cancel()
-
-	// В CLI у тебя уже работает list — сигнатура, скорее всего:
-	// ListServices(ctx, accessToken, projectID, region)
-	svcs, err := gcprun.ListServices(ctx, cr.AccessToken, cfg.ProjectID, cfg.Region)
+	svcs, err := gcprun.ListServices(ctx, tb.AccessToken, cfg.ProjectID, cfg.Region)
 	if err != nil {
 		render(views.ServicesListVM{
 			Error:   err.Error(),

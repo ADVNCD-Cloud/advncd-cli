@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/ADVNCD-Cloud/advncd-cli/internal/auth"
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/config"
-	"github.com/ADVNCD-Cloud/advncd-cli/internal/creds"
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/dashboard/views"
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/gcprun"
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/llm"
@@ -65,20 +65,10 @@ func serviceExplainHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Load creds
-	credStore, err := creds.DefaultStore()
+	ctxAuth, cancelAuth := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancelAuth()
+	tb, err := auth.GetAccessToken(ctxAuth)
 	if err != nil {
-		render(views.ServiceDetailVM{
-			Error:   "Failed to init creds store: " + err.Error(),
-			Name:    name,
-			Project: cfg.ProjectID,
-			Region:  cfg.Region,
-			Now:     time.Now(),
-		})
-		return
-	}
-	cr, err := credStore.Load()
-	if err != nil || cr == nil || cr.AccessToken == "" {
 		render(views.ServiceDetailVM{
 			Error:   "Not authenticated. Run: advncd login",
 			Name:    name,
@@ -93,7 +83,7 @@ func serviceExplainHandler(w http.ResponseWriter, r *http.Request) {
 	ctxRun, cancelRun := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancelRun()
 
-	svc, err := gcprun.GetService(ctxRun, cr.AccessToken, cfg.ProjectID, cfg.Region, name)
+	svc, err := gcprun.GetService(ctxRun, tb.AccessToken, cfg.ProjectID, cfg.Region, name)
 	if err != nil {
 		render(views.ServiceDetailVM{
 			Error:   err.Error(),
@@ -117,7 +107,7 @@ func serviceExplainHandler(w http.ResponseWriter, r *http.Request) {
 
 	authStatus := "ok"
 	authHint := ""
-	if !cr.Expiry.IsZero() && time.Until(cr.Expiry) <= 0 {
+	if !tb.Expiry.IsZero() && time.Until(tb.Expiry) <= 0 {
 		authStatus = "expired"
 		authHint = "Run: advncd login"
 	}

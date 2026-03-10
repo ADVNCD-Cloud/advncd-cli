@@ -8,8 +8,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/apperr"
+	"github.com/ADVNCD-Cloud/advncd-cli/internal/auth"
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/config"
-	"github.com/ADVNCD-Cloud/advncd-cli/internal/creds"
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/gcprun"
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/llm"
 )
@@ -32,22 +32,6 @@ var servicesExplainCmd = &cobra.Command{
 				WithFix("Run: advncd init")
 		}
 
-		// Load creds
-		credStore, err := creds.DefaultStore()
-		if err != nil {
-			return err
-		}
-		cr, err := credStore.Load()
-		if err != nil || cr == nil || cr.AccessToken == "" {
-			return apperr.New(apperr.AuthMissingClientID).
-				WithFix("Run: advncd login")
-		}
-
-		if !cr.Expiry.IsZero() && time.Until(cr.Expiry) <= 0 {
-			return apperr.New(apperr.AuthAuthTimeout).
-				WithFix("Run: advncd login")
-		}
-
 		// Fetch service detail (the same data we already show in dashboard)
 		client, llmCfg, err := llm.NewFromEnv()
 		if err != nil {
@@ -63,7 +47,12 @@ var servicesExplainCmd = &cobra.Command{
 		ctx, cancel := context.WithTimeout(context.Background(), ctxTimeout)
 		defer cancel()
 
-		detail, err := gcprun.GetServiceForExplain(ctx, cr.AccessToken, cfg.ProjectID, cfg.Region, svcName)
+		tb, err := auth.GetAccessToken(ctx)
+		if err != nil {
+			return err
+		}
+
+		detail, err := gcprun.GetServiceForExplain(ctx, tb.AccessToken, cfg.ProjectID, cfg.Region, svcName)
 		if err != nil {
 			return err
 		}
