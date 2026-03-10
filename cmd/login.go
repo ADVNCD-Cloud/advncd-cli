@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -15,17 +16,41 @@ import (
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/oauth"
 )
 
+var (
+	loginClientIDFlag     string
+	loginClientSecretFlag string
+)
+
 var loginCmd = &cobra.Command{
 	Use:   "login",
 	Short: "Authenticate with Google Cloud (Authorization Code + PKCE)",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		clientID := os.Getenv("ADVNCD_GCP_CLIENT_ID")
-		clientSecret := os.Getenv("ADVNCD_GCP_CLIENT_SECRET")
+		store, err := creds.DefaultStore()
+		if err != nil {
+			return err
+		}
+		existing, err := store.Load()
+		if err != nil {
+			return err
+		}
+
+		clientID := firstNonEmpty(
+			strings.TrimSpace(loginClientIDFlag),
+			strings.TrimSpace(os.Getenv("ADVNCD_GCP_CLIENT_ID")),
+		)
+		clientSecret := firstNonEmpty(
+			strings.TrimSpace(loginClientSecretFlag),
+			strings.TrimSpace(os.Getenv("ADVNCD_GCP_CLIENT_SECRET")),
+		)
+		if existing != nil {
+			clientID = firstNonEmpty(clientID, strings.TrimSpace(existing.ClientID))
+			clientSecret = firstNonEmpty(clientSecret, strings.TrimSpace(existing.ClientSecret))
+		}
 
 		if clientID == "" {
 			return apperr.New(apperr.AuthMissingClientID).
-				WithFix("For now (dev), export ADVNCD_GCP_CLIENT_ID from your OAuth Desktop Client ID.").
-				WithFix(`Example: export ADVNCD_GCP_CLIENT_ID="xxxx.apps.googleusercontent.com"`)
+				WithFix("Provide OAuth client id via --client-id or ADVNCD_GCP_CLIENT_ID.").
+				WithFix(`Example: advncd login --client-id "xxxx.apps.googleusercontent.com"`)
 		}
 
 		scopes := []string{
@@ -85,13 +110,16 @@ var loginCmd = &cobra.Command{
 			fmt.Println("✓ Logged in")
 		}
 
-		// ---- A3: persist creds locally ----
-		store, err := creds.DefaultStore()
-		if err != nil {
-			return err
-		}
-
 		expiry := time.Now().Add(time.Duration(tok.ExpiresIn) * time.Second)
+		refreshToken := strings.TrimSpace(tok.RefreshToken)
+
+		// Google may not always return refresh_token on re-consent.
+		if refreshToken == "" && existing != nil &&
+			strings.TrimSpace(existing.ClientID) == clientID &&
+			strings.TrimSpace(existing.RefreshToken) != "" {
+			refreshToken = strings.TrimSpace(existing.RefreshToken)
+			fmt.Println("i Reusing existing refresh_token from local credentials.")
+		}
 
 		c := creds.Credentials{
 			Version: 1,
@@ -99,10 +127,11 @@ var loginCmd = &cobra.Command{
 			Email:  me.Email,
 			Scopes: scopes,
 
-			ClientID: clientID,
+			ClientID:     clientID,
+			ClientSecret: clientSecret,
 
 			AccessToken:  tok.AccessToken,
-			RefreshToken: tok.RefreshToken,
+			RefreshToken: refreshToken,
 			Expiry:       expiry,
 			TokenType:    tok.TokenType,
 		}
@@ -139,4 +168,18 @@ func openBrowser(url string) bool {
 		return false
 	}
 	return true
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if strings.TrimSpace(v) != "" {
+			return strings.TrimSpace(v)
+		}
+	}
+	return ""
+}
+
+func init() {
+	loginCmd.Flags().StringVar(&loginClientIDFlag, "client-id", "", "Google OAuth client ID")
+	loginCmd.Flags().StringVar(&loginClientSecretFlag, "client-secret", "", "Google OAuth client secret (optional)")
 }

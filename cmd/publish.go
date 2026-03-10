@@ -84,9 +84,9 @@ var publishCmd = &cobra.Command{
 		}
 
 		// Artifact Registry image
-		// repo = advncd (MVP)
+		// Use unique tag per publish so Cloud Run always creates a new revision.
 		repo := "advncd"
-		image := fmt.Sprintf("%s-docker.pkg.dev/%s/%s/%s:latest", cfg.Region, cfg.ProjectID, repo, svc)
+		image := buildPublishImage(cfg.Region, cfg.ProjectID, repo, svc, time.Now())
 
 		fmt.Println("publish:")
 		fmt.Printf("  project: %s\n", cfg.ProjectID)
@@ -217,4 +217,9 @@ func buildPublishEnv(envFile string, envArgs []string) (map[string]string, error
 	}
 
 	return merged, nil
+}
+
+func buildPublishImage(region, projectID, repo, service string, now time.Time) string {
+	deployTag := now.UTC().Format("20060102-150405")
+	return fmt.Sprintf("%s-docker.pkg.dev/%s/%s/%s:%s", region, projectID, repo, service, deployTag)
 }

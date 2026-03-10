@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/ADVNCD-Cloud/advncd-cli/internal/auth"
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/config"
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/creds"
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/dashboard/views"
@@ -22,8 +23,8 @@ func overviewHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	vm := views.HomeVM{
-		Now:           time.Now(),
-		Email:         "-",
+		Now:            time.Now(),
+		Email:          "-",
 		TokenExpiresIn: "-",
 		ProjectID:      "-",
 		Region:         "-",
@@ -55,35 +56,28 @@ func overviewHandler(w http.ResponseWriter, r *http.Request) {
 		render(vm)
 		return
 	}
-	cr, err := credStore.Load()
-	if err != nil || cr == nil || cr.AccessToken == "" {
+	vm.CredsPath = credStore.Path
+
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+	tb, err := auth.GetAccessToken(ctx)
+	if err != nil {
 		vm.AuthStatus = "missing"
 		vm.AuthHint = "Run: advncd login"
-		vm.CredsPath = credStore.Path
 		render(vm)
 		return
 	}
 
 	vm.AuthStatus = "ok"
-	vm.Email = cr.Email
-	vm.CredsPath = credStore.Path
+	vm.Email = tb.Email
 
-	if !cr.Expiry.IsZero() {
-		d := time.Until(cr.Expiry).Round(time.Second)
-		if d < 0 {
-			vm.AuthStatus = "expired"
-			vm.AuthHint = "Run: advncd login"
-			vm.TokenExpiresIn = "expired"
-		} else {
-			vm.TokenExpiresIn = d.String()
-		}
+	if !tb.Expiry.IsZero() {
+		d := time.Until(tb.Expiry).Round(time.Second)
+		vm.TokenExpiresIn = d.String()
 	}
 
 	// Cloud Run snapshot (top 7 services)
-	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
-	defer cancel()
-
-	svcs, err := gcprun.ListServices(ctx, cr.AccessToken, cfg.ProjectID, cfg.Region)
+	svcs, err := gcprun.ListServices(ctx, tb.AccessToken, cfg.ProjectID, cfg.Region)
 	if err != nil {
 		// Keep auth/context visible, but show error banner
 		vm.Error = err.Error()

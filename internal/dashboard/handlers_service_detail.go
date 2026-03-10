@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ADVNCD-Cloud/advncd-cli/internal/auth"
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/config"
-	"github.com/ADVNCD-Cloud/advncd-cli/internal/creds"
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/dashboard/views"
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/gcprun"
 )
@@ -16,7 +16,10 @@ func serviceDetailHandler(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/services/")
 	path = strings.Trim(path, "/")
 	name, ok := serviceNameFromPath(r)
-	if !ok { http.NotFound(w, r); return }
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
 
 	render := func(vm views.ServiceDetailVM) {
 		views.Layout("Service "+name, "services",
@@ -25,8 +28,8 @@ func serviceDetailHandler(w http.ResponseWriter, r *http.Request) {
 				{Label: "Services", Href: "/services"},
 				{Label: name, Href: ""},
 			},
-				views.ServiceDetail(vm),
-			).
+			views.ServiceDetail(vm),
+		).
 			Render(r.Context(), w)
 	}
 
@@ -46,20 +49,10 @@ func serviceDetailHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Load creds
-	credStore, err := creds.DefaultStore()
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+	tb, err := auth.GetAccessToken(ctx)
 	if err != nil {
-		render(views.ServiceDetailVM{
-			Error:   "Failed to init creds store: " + err.Error(),
-			Name:    name,
-			Project: cfg.ProjectID,
-			Region:  cfg.Region,
-			Now:     time.Now(),
-		})
-		return
-	}
-	cr, err := credStore.Load()
-	if err != nil || cr == nil || cr.AccessToken == "" {
 		render(views.ServiceDetailVM{
 			Error:   "Not authenticated. Run: advncd login",
 			Name:    name,
@@ -70,11 +63,8 @@ func serviceDetailHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
-	defer cancel()
-
 	// IMPORTANT: GetService returns *gcprun.ServiceDetail in your codebase
-	svc, err := gcprun.GetService(ctx, cr.AccessToken, cfg.ProjectID, cfg.Region, name)
+	svc, err := gcprun.GetService(ctx, tb.AccessToken, cfg.ProjectID, cfg.Region, name)
 	if err != nil {
 		render(views.ServiceDetailVM{
 			Error:   err.Error(),
@@ -98,7 +88,7 @@ func serviceDetailHandler(w http.ResponseWriter, r *http.Request) {
 
 	authStatus := "ok"
 	authHint := ""
-	if !cr.Expiry.IsZero() && time.Until(cr.Expiry) <= 0 {
+	if !tb.Expiry.IsZero() && time.Until(tb.Expiry) <= 0 {
 		authStatus = "expired"
 		authHint = "Run: advncd login"
 	}
@@ -124,7 +114,7 @@ func serviceDetailHandler(w http.ResponseWriter, r *http.Request) {
 		MetricsURL24h: metrics24h,
 
 		Now: time.Now(),
-		
+
 		AuthStatus: authStatus,
 		AuthHint:   authHint,
 	})

@@ -29,10 +29,6 @@ type tokenError struct {
 }
 
 func ExchangeAuthCode(ctx context.Context, clientID, clientSecret, code, redirectURI, codeVerifier string) (*TokenResponse, error) {
-	// TEMP DEBUG (remove later)
-	println("DEBUG ExchangeAuthCode client_id:", clientID)
-	println("DEBUG ExchangeAuthCode has_secret:", strings.TrimSpace(clientSecret) != "")
-	println("DEBUG ExchangeAuthCode redirect_uri:", redirectURI)
 	if strings.TrimSpace(clientID) == "" {
 		return nil, apperr.New(apperr.AuthMissingClientID)
 	}

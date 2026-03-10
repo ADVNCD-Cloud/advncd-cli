@@ -8,7 +8,8 @@ type Credentials struct {
 	Email  string   `json:"email"`
 	Scopes []string `json:"scopes"`
 
-	ClientID string `json:"client_id"`
+	ClientID     string `json:"client_id"`
+	ClientSecret string `json:"client_secret,omitempty"`
 
 	AccessToken  string    `json:"access_token"`
 	RefreshToken string    `json:"refresh_token"`

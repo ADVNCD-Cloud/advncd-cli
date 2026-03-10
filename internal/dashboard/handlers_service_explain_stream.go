@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/ADVNCD-Cloud/advncd-cli/internal/auth"
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/config"
-	"github.com/ADVNCD-Cloud/advncd-cli/internal/creds"
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/gcprun"
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/llm"
 )
@@ -60,15 +60,10 @@ func serviceExplainStreamHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Load creds
-	credStore, err := creds.DefaultStore()
+	ctxAuth, cancelAuth := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancelAuth()
+	tb, err := auth.GetAccessToken(ctxAuth)
 	if err != nil {
-		_ = writeSSE(w, sseMsg{Type: "error", Text: "Failed to init creds store: " + err.Error()})
-		fl.Flush()
-		return
-	}
-	cr, err := credStore.Load()
-	if err != nil || cr == nil || cr.AccessToken == "" {
 		_ = writeSSE(w, sseMsg{Type: "error", Text: "Not authenticated. Run: advncd login"})
 		fl.Flush()
 		return
@@ -81,7 +76,7 @@ func serviceExplainStreamHandler(w http.ResponseWriter, r *http.Request) {
 	ctxRun, cancelRun := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancelRun()
 
-	svc, err := gcprun.GetService(ctxRun, cr.AccessToken, cfg.ProjectID, cfg.Region, name)
+	svc, err := gcprun.GetService(ctxRun, tb.AccessToken, cfg.ProjectID, cfg.Region, name)
 	if err != nil {
 		_ = writeSSE(w, sseMsg{Type: "error", Text: err.Error()})
 		fl.Flush()

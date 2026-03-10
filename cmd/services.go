@@ -7,8 +7,8 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/ADVNCD-Cloud/advncd-cli/internal/auth"
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/config"
-	"github.com/ADVNCD-Cloud/advncd-cli/internal/creds"
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/gcprun"
 )
 
@@ -30,22 +30,15 @@ var servicesCmd = &cobra.Command{
 			return fmt.Errorf("missing project/region config; run: advncd init")
 		}
 
-		credStore, err := creds.DefaultStore()
-		if err != nil {
-			return err
-		}
-		cr, err := credStore.Load()
-		if err != nil {
-			return err
-		}
-		if cr == nil || cr.AccessToken == "" {
-			return fmt.Errorf("not logged in; run: advncd login")
-		}
-
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		services, err := gcprun.ListServices(ctx, cr.AccessToken, cfg.ProjectID, cfg.Region)
+		tb, err := auth.GetAccessToken(ctx)
+		if err != nil {
+			return err
+		}
+
+		services, err := gcprun.ListServices(ctx, tb.AccessToken, cfg.ProjectID, cfg.Region)
 		if err != nil {
 			return err
 		}
