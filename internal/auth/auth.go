@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/apperr"
+	"github.com/ADVNCD-Cloud/advncd-cli/internal/authbroker"
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/creds"
-	"github.com/ADVNCD-Cloud/advncd-cli/internal/oauth"
 )
 
 var (
@@ -21,9 +21,58 @@ type TokenBundle struct {
 	Expiry      time.Time
 	Email       string
 	CredsPath   string
+	AppExpiry   time.Time
+	AuthBaseURL string
 }
 
-// GetAccessToken loads local creds, refreshes if needed, and returns a valid access token.
+type SessionInfo struct {
+	Email       string
+	AppExpiry   time.Time
+	CredsPath   string
+	AuthBaseURL string
+}
+
+func ResolveAuthBaseURL(stored string) string {
+	return firstNonEmpty(
+		os.Getenv("ADVNCD_AUTH_BASE_URL"),
+		stored,
+		authbroker.DefaultBaseURL,
+	)
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if strings.TrimSpace(v) != "" {
+			return strings.TrimSpace(v)
+		}
+	}
+	return ""
+}
+
+func GetSessionInfo() (*SessionInfo, error) {
+	store, err := creds.DefaultStore()
+	if err != nil {
+		return nil, err
+	}
+
+	c, err := store.Load()
+	if err != nil {
+		return nil, err
+	}
+	if c == nil || strings.TrimSpace(c.AppRefreshToken) == "" {
+		return nil, apperr.New(ErrNotLoggedIn).
+			WithFix("Run: advncd login")
+	}
+
+	return &SessionInfo{
+		Email:       c.Email,
+		AppExpiry:   c.AppAccessTokenExpiry,
+		CredsPath:   store.Path,
+		AuthBaseURL: ResolveAuthBaseURL(c.AuthBaseURL),
+	}, nil
+}
+
+// GetAccessToken loads local app creds, refreshes if needed, then asks auth broker for a GCP access token.
 func GetAccessToken(ctx context.Context) (*TokenBundle, error) {
 	store, err := creds.DefaultStore()
 	if err != nil {
@@ -34,49 +83,42 @@ func GetAccessToken(ctx context.Context) (*TokenBundle, error) {
 	if err != nil {
 		return nil, err
 	}
-	if c == nil {
+	if c == nil || strings.TrimSpace(c.AppRefreshToken) == "" {
 		return nil, apperr.New(ErrNotLoggedIn).
 			WithFix("Run: advncd login")
 	}
 
-	clientSecret := strings.TrimSpace(os.Getenv("ADVNCD_GCP_CLIENT_SECRET"))
-	if clientSecret == "" {
-		clientSecret = strings.TrimSpace(c.ClientSecret)
-	}
+	baseURL := ResolveAuthBaseURL(c.AuthBaseURL)
+	broker := authbroker.New(baseURL)
 
-	// Refresh if expiring soon (skew 30s)
-	if time.Until(c.Expiry) < 30*time.Second {
-		tok, err := oauth.RefreshAccessToken(ctx, c.ClientID, clientSecret, c.RefreshToken)
+	// Refresh app token if expiring soon (skew 30s)
+	if time.Until(c.AppAccessTokenExpiry) < 30*time.Second {
+		tok, err := broker.Refresh(ctx, c.AppRefreshToken)
 		if err != nil {
 			return nil, err
 		}
 
-		c.AccessToken = tok.AccessToken
-		c.TokenType = tok.TokenType
-		c.Expiry = time.Now().Add(time.Duration(tok.ExpiresIn) * time.Second)
+		c.AppAccessToken = tok.AppAccessToken
+		c.AppAccessTokenExpiry = time.Now().Add(time.Duration(tok.ExpiresIn) * time.Second)
+		c.AuthBaseURL = baseURL
 
 		if err := store.Save(*c); err != nil {
 			return nil, err
 		}
 	}
 
+	gcpTok, err := broker.GCPAccessToken(ctx, c.AppAccessToken)
+	if err != nil {
+		return nil, err
+	}
+	gcpExpiry := time.Now().Add(time.Duration(gcpTok.ExpiresIn) * time.Second)
+
 	return &TokenBundle{
-		AccessToken: c.AccessToken,
-		Expiry:      c.Expiry,
+		AccessToken: gcpTok.AccessToken,
+		Expiry:      gcpExpiry,
 		Email:       c.Email,
 		CredsPath:   store.Path,
+		AppExpiry:   c.AppAccessTokenExpiry,
+		AuthBaseURL: baseURL,
 	}, nil
-}
-
-// GetIdentity verifies the token by calling userinfo.
-func GetIdentity(ctx context.Context) (*oauth.UserInfo, *TokenBundle, error) {
-	tb, err := GetAccessToken(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-	me, err := oauth.FetchUserInfo(ctx, tb.AccessToken)
-	if err != nil {
-		return nil, nil, err
-	}
-	return me, tb, nil
 }

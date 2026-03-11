@@ -20,8 +20,13 @@ var statusCmd = &cobra.Command{
 		ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 		defer cancel()
 
-		// Auth + token verification (userinfo)
-		me, tb, err := auth.GetIdentity(ctx)
+		si, err := auth.GetSessionInfo()
+		if err != nil {
+			return err
+		}
+
+		// Probe broker + gcp access token
+		tb, err := auth.GetAccessToken(ctx)
 		if err != nil {
 			return err
 		}
@@ -37,9 +42,12 @@ var statusCmd = &cobra.Command{
 		}
 
 		fmt.Println("auth: ok")
-		fmt.Printf("email: %s\n", me.Email)
-		fmt.Printf("token_expires_in: %s\n", time.Until(tb.Expiry).Truncate(time.Second))
-		fmt.Printf("creds: %s\n", tb.CredsPath)
+		fmt.Printf("email: %s\n", si.Email)
+		fmt.Printf("app_access_expires_in: %s\n", time.Until(si.AppExpiry).Truncate(time.Second))
+		fmt.Printf("auth_base_url: %s\n", si.AuthBaseURL)
+		fmt.Println("gcp_access_token: ok")
+		fmt.Printf("gcp_access_expires_in: %s\n", time.Until(tb.Expiry).Truncate(time.Second))
+		fmt.Printf("creds: %s\n", si.CredsPath)
 
 		fmt.Println()
 		if cfg == nil || cfg.ProjectID == "" || cfg.Region == "" {
@@ -67,16 +75,9 @@ var statusCmd = &cobra.Command{
 		}
 		projectNumber := p.ProjectNumber
 
-		required := []string{
-			"run.googleapis.com",            // Cloud Run
-			"cloudbuild.googleapis.com",      // Cloud Build
-			"artifactregistry.googleapis.com",// Artifact Registry
-			"monitoring.googleapis.com",      // Cloud Monitoring
-		}
-
 		missing := []string{}
 
-		for _, svc := range required {
+		for _, svc := range requiredGoogleAPIs {
 			state, err := gcpserviceusage.GetServiceState(ctx, tb.AccessToken, projectNumber, svc)
 			if err != nil {
 				// If we can't query one service, show unknown but continue.
@@ -100,7 +101,7 @@ var statusCmd = &cobra.Command{
 				fmt.Printf("  - %s\n", m)
 			}
 			// (Optional hint; still no gcloud dependency)
-			fmt.Println("note: later we'll add `advncd apis enable` to enable these via Google APIs.")
+			fmt.Println("fix: run `advncd apis enable` to enable missing APIs from CLI.")
 		}
 
 		return nil

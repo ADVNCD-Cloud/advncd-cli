@@ -28,7 +28,7 @@ type tokenError struct {
 	ErrorDescription string `json:"error_description"`
 }
 
-func ExchangeAuthCode(ctx context.Context, clientID, clientSecret, code, redirectURI, codeVerifier string) (*TokenResponse, error) {
+func ExchangeAuthCode(ctx context.Context, clientID, code, redirectURI, codeVerifier string) (*TokenResponse, error) {
 	if strings.TrimSpace(clientID) == "" {
 		return nil, apperr.New(apperr.AuthMissingClientID)
 	}
@@ -42,9 +42,6 @@ func ExchangeAuthCode(ctx context.Context, clientID, clientSecret, code, redirec
 
 	form := url.Values{}
 	form.Set("client_id", clientID)
-	if strings.TrimSpace(clientSecret) != "" {
-		form.Set("client_secret", clientSecret)
-	}
 	form.Set("grant_type", "authorization_code")
 	form.Set("code", code)
 	form.Set("redirect_uri", redirectURI)
@@ -80,7 +77,7 @@ func ExchangeAuthCode(ctx context.Context, clientID, clientSecret, code, redirec
 		}
 
 		ae = ae.WithFix("Ensure your OAuth client is type 'Desktop' (installed app).").
-			WithFix("If Google requires a secret for this client, export ADVNCD_GCP_CLIENT_SECRET and retry.")
+			WithFix("This CLI uses secretless PKCE and does not send client_secret.")
 
 		return nil, ae
 	}
