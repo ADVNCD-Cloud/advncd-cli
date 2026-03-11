@@ -12,7 +12,7 @@ import (
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/apperr"
 )
 
-func RefreshAccessToken(ctx context.Context, clientID, clientSecret, refreshToken string) (*TokenResponse, error) {
+func RefreshAccessToken(ctx context.Context, clientID, refreshToken string) (*TokenResponse, error) {
 	if strings.TrimSpace(clientID) == "" {
 		return nil, apperr.New(apperr.AuthMissingClientID)
 	}
@@ -23,9 +23,6 @@ func RefreshAccessToken(ctx context.Context, clientID, clientSecret, refreshToke
 
 	form := url.Values{}
 	form.Set("client_id", clientID)
-	if strings.TrimSpace(clientSecret) != "" {
-		form.Set("client_secret", clientSecret)
-	}
 	form.Set("grant_type", "refresh_token")
 	form.Set("refresh_token", refreshToken)
 
@@ -58,7 +55,8 @@ func RefreshAccessToken(ctx context.Context, clientID, clientSecret, refreshToke
 			ae = ae.WithMeta("raw_body", string(body))
 		}
 
-		ae = ae.WithFix("Try 'advncd login' again to refresh consent and tokens.")
+		ae = ae.WithFix("Try 'advncd login' again to refresh consent and tokens.").
+			WithFix("Ensure the OAuth client is Desktop type; secretless refresh is expected.")
 		return nil, ae
 	}
 

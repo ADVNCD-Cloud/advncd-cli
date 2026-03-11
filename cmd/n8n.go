@@ -38,6 +38,7 @@ var (
 	n8nMinInstances  int
 	n8nNoCPUThrottle bool
 	n8nRedeploy      bool
+	n8nSetDefault    bool
 	n8nPublicURL     string
 	n8nDBURL         string
 	n8nDBSchema      string
@@ -184,6 +185,7 @@ func init() {
 	n8nCmd.Flags().IntVar(&n8nMinInstances, "min-instances", 1, "Cloud Run minimum instances (-1 to keep current setting)")
 	n8nCmd.Flags().BoolVar(&n8nNoCPUThrottle, "no-cpu-throttling", true, "Disable CPU throttling for more stable n8n runtime")
 	n8nCmd.Flags().BoolVar(&n8nRedeploy, "redeploy", false, "Use project/region from saved config and redeploy existing service")
+	n8nCmd.Flags().BoolVar(&n8nSetDefault, "set-default", false, "Save selected project/region as default config")
 	n8nCmd.Flags().StringVar(&n8nPublicURL, "public-url", "", "Public base URL for n8n (auto-detected from service URL if empty)")
 	n8nCmd.Flags().StringVar(&n8nDBURL, "db-url", "", "PostgreSQL URL for persistent n8n state (e.g. Supabase)")
 	n8nCmd.Flags().StringVar(&n8nDBSchema, "db-schema", "public", "PostgreSQL schema for n8n tables")
@@ -347,19 +349,25 @@ func resolveN8NTarget(ctx context.Context, accessToken string) (string, string, 
 		region = readRegion()
 	}
 
-	cfgStore, err := config.DefaultStore()
-	if err != nil {
-		return "", "", err
+	if n8nSetDefault {
+		cfgStore, err := config.DefaultStore()
+		if err != nil {
+			return "", "", err
+		}
+		cfg := config.Config{
+			Version:   1,
+			ProjectID: projectID,
+			Region:    region,
+		}
+		if err := cfgStore.Save(cfg); err != nil {
+			return "", "", err
+		}
+		fmt.Printf("✓ Saved config: project=%s region=%s\n", projectID, region)
+	} else {
+		fmt.Printf("i Using project=%s region=%s for this run (default config unchanged)\n", projectID, region)
+		fmt.Println("  Tip: add --set-default to persist this as default.")
 	}
-	cfg := config.Config{
-		Version:   1,
-		ProjectID: projectID,
-		Region:    region,
-	}
-	if err := cfgStore.Save(cfg); err != nil {
-		return "", "", err
-	}
-	fmt.Printf("✓ Saved config: project=%s region=%s\n", projectID, region)
+
 	return projectID, region, nil
 }
 

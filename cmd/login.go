@@ -12,18 +12,17 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/apperr"
+	"github.com/ADVNCD-Cloud/advncd-cli/internal/authbroker"
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/creds"
-	"github.com/ADVNCD-Cloud/advncd-cli/internal/oauth"
 )
 
 var (
-	loginClientIDFlag     string
-	loginClientSecretFlag string
+	loginAuthBaseURLFlag string
 )
 
 var loginCmd = &cobra.Command{
 	Use:   "login",
-	Short: "Authenticate with Google Cloud (Authorization Code + PKCE)",
+	Short: "Authenticate with Google Cloud via auth broker backend",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		store, err := creds.DefaultStore()
 		if err != nil {
@@ -34,124 +33,125 @@ var loginCmd = &cobra.Command{
 			return err
 		}
 
-		clientID := firstNonEmpty(
-			strings.TrimSpace(loginClientIDFlag),
-			strings.TrimSpace(os.Getenv("ADVNCD_GCP_CLIENT_ID")),
-		)
-		clientSecret := firstNonEmpty(
-			strings.TrimSpace(loginClientSecretFlag),
-			strings.TrimSpace(os.Getenv("ADVNCD_GCP_CLIENT_SECRET")),
-		)
-		if existing != nil {
-			clientID = firstNonEmpty(clientID, strings.TrimSpace(existing.ClientID))
-			clientSecret = firstNonEmpty(clientSecret, strings.TrimSpace(existing.ClientSecret))
+		baseURL := resolveAuthBaseURL(existing, loginAuthBaseURLFlag)
+		if strings.TrimSpace(baseURL) == "" {
+			return apperr.New(apperr.AuthBrokerProtocol).
+				WithFix("Set ADVNCD_AUTH_BASE_URL or use --auth-base-url.")
 		}
 
-		if clientID == "" {
-			return apperr.New(apperr.AuthMissingClientID).
-				WithFix("Provide OAuth client id via --client-id or ADVNCD_GCP_CLIENT_ID.").
-				WithFix(`Example: advncd login --client-id "xxxx.apps.googleusercontent.com"`)
-		}
+		broker := authbroker.New(baseURL)
 
-		scopes := []string{
-			"openid",
-			"email",
-			"profile",
-			"https://www.googleapis.com/auth/cloud-platform",
-		}
-
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 		defer cancel()
 
-		fmt.Println("Starting local callback server...")
-		sess, err := oauth.BeginAuthCodePKCE(oauth.AuthCodeRequest{
-			ClientID: clientID,
-			Scopes:   scopes,
-		})
+		deviceName, _ := os.Hostname()
+		if strings.TrimSpace(deviceName) == "" {
+			deviceName = runtime.GOOS
+		}
+
+		fmt.Println("Requesting login session from auth broker...")
+		start, err := broker.Start(ctx, deviceName)
 		if err != nil {
 			return err
 		}
 
 		fmt.Println("Opening browser for authentication...")
-		if !openBrowser(sess.AuthURL) {
+		if !openBrowser(start.VerifyURL) {
 			fmt.Println("Could not open browser automatically. Please open this URL:")
-			fmt.Printf("  %s\n", sess.AuthURL)
+			fmt.Printf("  %s\n", start.VerifyURL)
 		}
 
 		fmt.Println("Waiting for authentication to complete in browser...")
-		result, err := sess.Wait(ctx)
-		if err != nil {
-			return err
+
+		expiresIn := start.ExpiresIn
+		if expiresIn <= 0 {
+			expiresIn = 600
+		}
+		deadline := time.Now().Add(time.Duration(expiresIn) * time.Second)
+		interval := time.Duration(start.IntervalSeconds) * time.Second
+		if interval < time.Second {
+			interval = 5 * time.Second
 		}
 
-		fmt.Println("Exchanging authorization code for tokens...")
-		tok, err := oauth.ExchangeAuthCode(
-			ctx,
-			clientID,
-			clientSecret,
-			result.Code,
-			result.RedirectURI,
-			result.CodeVerifier,
-		)
-		if err != nil {
-			return err
+		for {
+			if time.Now().After(deadline) {
+				return apperr.New(apperr.AuthPollTimeout).
+					WithFix("Login timed out waiting for approval. Run 'advncd login' again.")
+			}
+
+			poll, err := broker.Poll(ctx, start.SessionID)
+			if err != nil {
+				return err
+			}
+
+			switch strings.TrimSpace(poll.Status) {
+			case "", "pending":
+				if poll.RetryAfterSeconds > 0 {
+					interval = time.Duration(poll.RetryAfterSeconds) * time.Second
+				}
+				time.Sleep(interval)
+				continue
+			case "denied":
+				return apperr.New(apperr.AuthPollDenied).
+					WithFix("Approve login in browser and retry 'advncd login'.")
+			case "expired":
+				return apperr.New(apperr.AuthPollExpired).
+					WithFix("Run 'advncd login' again to start a new session.")
+			case "approved":
+				if poll.ExpiresIn <= 0 {
+					poll.ExpiresIn = 900
+				}
+				if strings.TrimSpace(poll.AppAccessToken) == "" || strings.TrimSpace(poll.AppRefreshToken) == "" {
+					return apperr.New(apperr.AuthBrokerProtocol).
+						WithFix("Auth broker approved login but returned empty tokens.")
+				}
+
+				c := creds.Credentials{
+					Version: 2,
+					Email:   strings.TrimSpace(poll.Email),
+
+					AuthBaseURL: baseURL,
+
+					AppAccessToken:      strings.TrimSpace(poll.AppAccessToken),
+					AppRefreshToken:     strings.TrimSpace(poll.AppRefreshToken),
+					AppAccessTokenExpiry: time.Now().Add(time.Duration(poll.ExpiresIn) * time.Second),
+				}
+
+				if err := store.Save(c); err != nil {
+					return err
+				}
+
+				email := c.Email
+				if email == "" {
+					email = "<unknown>"
+				}
+				fmt.Println()
+				fmt.Printf("✓ Logged in as %s\n", email)
+				fmt.Printf("✓ Saved credentials: %s\n", store.Path)
+				return nil
+			default:
+				if poll.RetryAfterSeconds > 0 {
+					interval = time.Duration(poll.RetryAfterSeconds) * time.Second
+				}
+				return apperr.New(apperr.AuthBrokerProtocol).
+					WithMeta("poll_status", poll.Status).
+					WithFix("Auth broker returned unknown poll status.")
+			}
 		}
-
-		fmt.Println("Fetching user info...")
-		me, err := oauth.FetchUserInfo(ctx, tok.AccessToken)
-		if err != nil {
-			return err
-		}
-
-		fmt.Println()
-		if me.Email != "" {
-			fmt.Printf("✓ Logged in as %s\n", me.Email)
-		} else {
-			fmt.Println("✓ Logged in")
-		}
-
-		expiry := time.Now().Add(time.Duration(tok.ExpiresIn) * time.Second)
-		refreshToken := strings.TrimSpace(tok.RefreshToken)
-
-		// Google may not always return refresh_token on re-consent.
-		if refreshToken == "" && existing != nil &&
-			strings.TrimSpace(existing.ClientID) == clientID &&
-			strings.TrimSpace(existing.RefreshToken) != "" {
-			refreshToken = strings.TrimSpace(existing.RefreshToken)
-			fmt.Println("i Reusing existing refresh_token from local credentials.")
-		}
-
-		c := creds.Credentials{
-			Version: 1,
-
-			Email:  me.Email,
-			Scopes: scopes,
-
-			ClientID:     clientID,
-			ClientSecret: clientSecret,
-
-			AccessToken:  tok.AccessToken,
-			RefreshToken: refreshToken,
-			Expiry:       expiry,
-			TokenType:    tok.TokenType,
-		}
-
-		if c.RefreshToken == "" {
-			// Not fatal, but important for real “local-first” experience
-			fmt.Println("! Warning: refresh_token is empty.")
-			fmt.Println("  This can happen if Google doesn't re-issue refresh tokens on repeated consents.")
-			fmt.Println("  If future commands fail after token expiry, run: advncd login")
-		}
-
-		if err := store.Save(c); err != nil {
-			return err
-		}
-
-		fmt.Printf("✓ Saved credentials: %s\n", store.Path)
-		// ---- end A3 ----
-
-		return nil
 	},
+}
+
+func resolveAuthBaseURL(existing *creds.Credentials, flagValue string) string {
+	stored := ""
+	if existing != nil {
+		stored = existing.AuthBaseURL
+	}
+	return firstNonEmpty(
+		flagValue,
+		os.Getenv("ADVNCD_AUTH_BASE_URL"),
+		stored,
+		authbroker.DefaultBaseURL,
+	)
 }
 
 func openBrowser(url string) bool {
@@ -180,6 +180,5 @@ func firstNonEmpty(values ...string) string {
 }
 
 func init() {
-	loginCmd.Flags().StringVar(&loginClientIDFlag, "client-id", "", "Google OAuth client ID")
-	loginCmd.Flags().StringVar(&loginClientSecretFlag, "client-secret", "", "Google OAuth client secret (optional)")
+	loginCmd.Flags().StringVar(&loginAuthBaseURLFlag, "auth-base-url", "", "Auth broker base URL (defaults to ADVNCD_AUTH_BASE_URL or built-in URL)")
 }

@@ -26,6 +26,13 @@ var (
 
 	AuthTokenExchange = E("A-AUTH-300", "Failed to exchange authorization code for tokens")
 	AuthUserInfo      = E("A-AUTH-301", "Failed to fetch user info")
+
+	AuthBrokerUnavailable = E("A-AUTH-500", "Auth broker is unavailable")
+	AuthPollTimeout       = E("A-AUTH-501", "Login polling timed out")
+	AuthPollDenied        = E("A-AUTH-502", "Login request was denied")
+	AuthPollExpired       = E("A-AUTH-503", "Login session expired")
+	AuthInvalidRefresh    = E("A-AUTH-504", "Invalid app refresh token")
+	AuthBrokerProtocol    = E("A-AUTH-505", "Auth broker response is malformed")
 )
 
 // byCode enables restoring an error by code (e.g., logs, dashboard, remote agent).
@@ -53,6 +60,13 @@ var byCode = map[string]Entry{
 	
 	AuthTokenExchange.Code: AuthTokenExchange,
 	AuthUserInfo.Code:      AuthUserInfo,
+
+	AuthBrokerUnavailable.Code: AuthBrokerUnavailable,
+	AuthPollTimeout.Code:       AuthPollTimeout,
+	AuthPollDenied.Code:        AuthPollDenied,
+	AuthPollExpired.Code:       AuthPollExpired,
+	AuthInvalidRefresh.Code:    AuthInvalidRefresh,
+	AuthBrokerProtocol.Code:    AuthBrokerProtocol,
 }
 
 // FromCode returns a catalog entry for a known code, otherwise a generic entry.

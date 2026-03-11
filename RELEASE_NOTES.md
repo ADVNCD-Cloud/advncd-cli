@@ -1,5 +1,23 @@
 # Release Notes
 
+## 0.2.2 - 2026-03-11
+
+### Changed
+
+- Replaced local Google OAuth code flow in CLI with auth broker flow.
+- `advncd login` now uses broker `start + browser + poll` flow and stores app tokens locally.
+- `GetAccessToken()` now refreshes app token via broker and fetches short-lived GCP access token via broker.
+- Added `ADVNCD_AUTH_BASE_URL` (default: `https://www.andreitazetdinov.com`).
+- `advncd logout` now calls broker logout before deleting local credentials.
+- `advncd n8n` no longer overwrites default project/region unless `--set-default` is provided.
+
+## 0.2.1 - 2026-03-11
+
+### Changed
+
+- `advncd login` now supports zero-config auth with built-in OAuth client defaults.
+- `ADVNCD_GCP_CLIENT_ID` is now an optional override instead of required setup.
+
 ## 0.2.0 - 2026-03-10
 
 ### Added

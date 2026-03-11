@@ -38,6 +38,7 @@ func init() {
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(publishCmd)
 	rootCmd.AddCommand(projectsCmd)
+	rootCmd.AddCommand(apisCmd)
 	rootCmd.AddCommand(n8nCmd)
 
 	servicesCmd.AddCommand(servicesDescribeCmd)

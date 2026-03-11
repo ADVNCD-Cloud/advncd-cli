@@ -14,8 +14,8 @@ It combines authentication, project setup, deploy, operations links, and n8n pro
 
 ## What You Can Do
 
-- Authenticate with Google OAuth (Authorization Code + PKCE).
-- Persist and auto-refresh access tokens from refresh token.
+- Authenticate via browser through the Advncd OAuth broker backend.
+- Persist and auto-refresh app tokens, then mint short-lived GCP access tokens on demand.
 - Pick or create a GCP project for n8n deployment.
 - Deploy Go apps to Cloud Run through Cloud Build + Artifact Registry.
 - Manage Cloud Run services (list/describe/open/logs/metrics).
@@ -38,36 +38,36 @@ Download the binary for your OS/arch from GitHub Releases and add it to your `PA
 
 ## Quick Start
 
-1. Set Google OAuth client values (or pass flags to `login`):
-
-```bash
-export ADVNCD_GCP_CLIENT_ID="YOUR_CLIENT_ID.apps.googleusercontent.com"
-export ADVNCD_GCP_CLIENT_SECRET="YOUR_CLIENT_SECRET" # optional for some clients
-```
-
-2. Authenticate:
+1. Authenticate:
 
 ```bash
 ./advncd login
 ```
 
-3. Select project and region:
+2. Select project and region:
 
 ```bash
 ./advncd init
 ```
 
-4. Generate deploy plan and deploy your app (any stack supported by Buildpacks):
+3. Generate deploy plan and deploy your app (any stack supported by Buildpacks):
 
 ```bash
 ./advncd publish scan
 ./advncd publish
 ```
 
-5. Check service status:
+4. Check service status:
 
 ```bash
 ./advncd services
+```
+
+Optional auth broker override:
+
+```bash
+export ADVNCD_AUTH_BASE_URL="https://www.andreitazetdinov.com"
+./advncd login
 ```
 
 ## n8n Quick Start on Cloud Run
@@ -75,7 +75,7 @@ export ADVNCD_GCP_CLIENT_SECRET="YOUR_CLIENT_SECRET" # optional for some clients
 Interactive deploy:
 
 ```bash
-./advncd n8n
+./advncd n8n --set-default
 ```
 
 Redeploy to the saved project/region:
@@ -111,23 +111,28 @@ You can override it any time:
 ### Core
 
 #### `advncd login`
-Authenticate with Google Cloud using browser-based OAuth Authorization Code + PKCE.
+Authenticate with Google Cloud via browser-based auth broker flow.
 
 Flags:
-- `--client-id`: Google OAuth client ID.
-- `--client-secret`: Google OAuth client secret (optional).
+- `--auth-base-url`: auth broker base URL override (optional).
 
 Example:
 
 ```bash
-./advncd login --client-id "xxx.apps.googleusercontent.com"
+./advncd login --auth-base-url "https://www.andreitazetdinov.com"
 ```
 
 #### `advncd status`
-Show auth status, token expiry, config state, and required API readiness.
+Show auth status (app token + broker probe), config state, and required API readiness.
+
+#### `advncd apis enable [api ...]`
+Enable required APIs in the current project. If no APIs are passed, enables default required set (`run`, `cloudbuild`, `artifactregistry`, `monitoring`).
+
+Flags:
+- `--project`: override configured project id.
 
 #### `advncd logout`
-Delete local credentials.
+Revoke app session in auth broker and delete local credentials.
 
 #### `advncd init`
 Set default project and region (interactive if omitted).
@@ -223,6 +228,7 @@ Flags:
 - `--min-instances`: Cloud Run min instances (default `1`, use `-1` to keep current).
 - `--no-cpu-throttling`: disable CPU throttling (default `true`).
 - `--redeploy`: use saved project/region and redeploy existing service.
+- `--set-default`: save selected project/region as default config.
 - `--public-url`: public base URL for n8n.
 - `--db-url`: Postgres URL for persistent state.
 - `--db-schema`: Postgres schema (default `public`).
@@ -232,7 +238,7 @@ Flags:
 Examples:
 
 ```bash
-./advncd n8n --project my-n8n-project --create-project --region europe-west3
+./advncd n8n --project my-n8n-project --create-project --region europe-west3 --set-default
 ./advncd n8n --redeploy
 ./advncd n8n --image n8nio/n8n:latest --redeploy
 ```
@@ -274,9 +280,8 @@ Print a valid access token for debugging/integration.
 
 ## Environment Variables
 
-Google OAuth:
-- `ADVNCD_GCP_CLIENT_ID`
-- `ADVNCD_GCP_CLIENT_SECRET`
+Auth:
+- `ADVNCD_AUTH_BASE_URL` (default: `https://www.andreitazetdinov.com`)
 
 LLM:
 - `ADVNCD_LLM_PROVIDER` (default: `ollama`)
@@ -290,14 +295,13 @@ The binary imports `github.com/joho/godotenv/autoload`, so if a `.env` file exis
 
 Advncd stores data under `os.UserConfigDir()/advncd`:
 
-- `credentials.json`: OAuth client + tokens.
+- `credentials.json`: auth broker app tokens + metadata.
 - `config.json`: selected project/region defaults.
 
 File permissions are restricted by the CLI (`0700` directory, `0600` files where applicable).
 
 Recommended:
 - Never commit `.env` with secrets.
-- Prefer rotating OAuth client secrets when sharing machines.
 - Use a stable external Postgres and `N8N_ENCRYPTION_KEY` for production n8n.
 
 ## Typical Flows
