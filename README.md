@@ -325,4 +325,5 @@ n8n managed deploy:
 
 ## License
 
-This project is licensed under the MIT License. See [LICENSE](./LICENSE).
+This project is licensed under the PolyForm Noncommercial License 1.0.0.
+Commercial use is not permitted. See [LICENSE](./LICENSE).
