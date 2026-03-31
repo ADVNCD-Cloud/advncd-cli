@@ -19,6 +19,7 @@ import (
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/apperr"
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/auth"
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/config"
+	"github.com/ADVNCD-Cloud/advncd-cli/internal/contracts"
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/gcpcrm"
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/gcprun"
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/gcpserviceusage"
@@ -50,147 +51,170 @@ var (
 var n8nCmd = &cobra.Command{
 	Use:   "n8n",
 	Short: "Deploy or redeploy n8n to Cloud Run",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
-		defer cancel()
+	RunE:  runN8N,
+}
 
-		tb, err := auth.GetAccessToken(ctx)
-		if err != nil {
-			return err
-		}
-
-		projectID, region, err := resolveN8NTarget(ctx, tb.AccessToken)
-		if err != nil {
-			return err
-		}
-
-		proj, err := waitProjectActive(ctx, tb.AccessToken, projectID)
-		if err != nil {
-			return err
-		}
-
-		if err := ensureRunAPI(ctx, tb.AccessToken, proj.ProjectNumber); err != nil {
-			return err
-		}
-
-		service := projectslug.Slugify(strings.TrimSpace(n8nServiceName))
-		if service == "" {
-			service = "n8n"
-		}
-		image := strings.TrimSpace(n8nImage)
-		if image == "" {
-			image = n8nDefaultImage
-		}
-
-		var existingSvc *gcprun.ServiceDetail
-		publicURL := strings.TrimSpace(n8nPublicURL)
-		svc, err := gcprun.GetService(ctx, tb.AccessToken, projectID, region, service)
-		if err == nil {
-			existingSvc = svc
-			if publicURL == "" && strings.TrimSpace(svc.URL) != "" {
-				publicURL = strings.TrimSpace(svc.URL)
-			}
-		} else if !isServiceNotFound(err) {
-			return err
-		}
-
-		existingEnv := map[string]string{}
-		if existingSvc != nil {
-			existingEnv = copyStringMap(existingSvc.Env)
-		}
-
-		dbEnv, err := resolveN8NDatabaseEnv(existingEnv)
-		if err != nil {
-			return err
-		}
-		key, err := resolveN8NEncryptionKey(existingEnv)
-		if err != nil {
-			return err
-		}
-
-		env := mergeEnv(existingEnv, buildN8NEnv(publicURL, n8nPort))
-		env = mergeEnv(env, dbEnv)
-		if strings.TrimSpace(key) != "" {
-			env["N8N_ENCRYPTION_KEY"] = strings.TrimSpace(key)
-		}
-
-		deployReq := gcprun.DeployRequest{
-			AccessToken:   tb.AccessToken,
-			ProjectID:     projectID,
-			Region:        region,
-			ServiceName:   service,
-			Image:         image,
-			ContainerPort: n8nPort,
-			Memory:        strings.TrimSpace(n8nMemory),
-			Env:           env,
-		}
-		if n8nMinInstances >= 0 {
-			v := n8nMinInstances
-			deployReq.MinInstances = &v
-		}
-		if n8nNoCPUThrottle {
-			v := false // cpuIdle=false => no CPU throttling
-			deployReq.CPUIDle = &v
-		}
-
-		fmt.Println("Deploying n8n to Cloud Run...")
-		deployed, err := gcprun.DeployService(ctx, deployReq)
-		if err != nil {
-			return err
-		}
-
-		// On first deploy we only know final service URL after creation.
-		finalURL := firstNonEmpty(strings.TrimSpace(n8nPublicURL), strings.TrimSpace(deployed.URL), strings.TrimSpace(publicURL))
-		finalEnv := mergeEnv(existingEnv, buildN8NEnv(finalURL, n8nPort))
-		finalEnv = mergeEnv(finalEnv, dbEnv)
-		if strings.TrimSpace(key) != "" {
-			finalEnv["N8N_ENCRYPTION_KEY"] = strings.TrimSpace(key)
-		}
-		if finalURL != "" && !sameStringMap(env, finalEnv) {
-			fmt.Println("Applying n8n public URL settings...")
-			deployReq.Env = finalEnv
-			deployed2, err := gcprun.DeployService(ctx, deployReq)
-			if err != nil {
-				return err
-			}
-			if strings.TrimSpace(deployed2.URL) != "" {
-				deployed = deployed2
-			}
-		}
-
-		fmt.Println("Allowing unauthenticated access...")
-		if err := gcprun.AllowUnauthenticated(ctx, tb.AccessToken, projectID, region, service); err != nil {
-			return err
-		}
-
-		fmt.Println("✓ n8n deployed")
-		if deployed.URL != "" {
-			fmt.Printf("URL: %s\n", deployed.URL)
-		} else {
-			fmt.Println("URL: not returned by API; open Cloud Run console to copy it.")
-		}
-		return nil
-	},
+var launchCmd = &cobra.Command{
+	Use:   contracts.CommandLaunch + " [preset]",
+	Short: "Launch a ready-made service (currently: n8n)",
+	Args:  cobra.MaximumNArgs(1),
+	RunE:  runLaunch,
 }
 
 func init() {
-	n8nCmd.Flags().StringVar(&n8nProject, "project", "", "GCP project ID to use")
-	n8nCmd.Flags().StringVar(&n8nProjectName, "project-name", "", "Display name for new project")
-	n8nCmd.Flags().BoolVar(&n8nCreateProject, "create-project", false, "Create project from --project")
-	n8nCmd.Flags().StringVar(&n8nRegion, "region", "", "Cloud Run region (default: interactive)")
-	n8nCmd.Flags().StringVar(&n8nServiceName, "service", "n8n", "Cloud Run service name")
-	n8nCmd.Flags().StringVar(&n8nImage, "image", n8nDefaultImage, "n8n container image")
-	n8nCmd.Flags().StringVar(&n8nMemory, "memory", "2Gi", "Memory limit for Cloud Run service")
-	n8nCmd.Flags().IntVar(&n8nPort, "port", 5678, "Container port for n8n")
-	n8nCmd.Flags().IntVar(&n8nMinInstances, "min-instances", 1, "Cloud Run minimum instances (-1 to keep current setting)")
-	n8nCmd.Flags().BoolVar(&n8nNoCPUThrottle, "no-cpu-throttling", true, "Disable CPU throttling for more stable n8n runtime")
-	n8nCmd.Flags().BoolVar(&n8nRedeploy, "redeploy", false, "Use project/region from saved config and redeploy existing service")
-	n8nCmd.Flags().BoolVar(&n8nSetDefault, "set-default", false, "Save selected project/region as default config")
-	n8nCmd.Flags().StringVar(&n8nPublicURL, "public-url", "", "Public base URL for n8n (auto-detected from service URL if empty)")
-	n8nCmd.Flags().StringVar(&n8nDBURL, "db-url", "", "PostgreSQL URL for persistent n8n state (e.g. Supabase)")
-	n8nCmd.Flags().StringVar(&n8nDBSchema, "db-schema", "public", "PostgreSQL schema for n8n tables")
-	n8nCmd.Flags().BoolVar(&n8nDBSSLReject, "db-ssl-reject-unauthorized", false, "Validate DB SSL certificate (for Supabase usually false)")
-	n8nCmd.Flags().StringVar(&n8nEncryptKey, "encryption-key", "", "N8N_ENCRYPTION_KEY (recommended: stable secret)")
+	bindN8NFlags(n8nCmd)
+	bindN8NFlags(launchCmd)
+}
+
+func bindN8NFlags(cmd *cobra.Command) {
+	cmd.Flags().StringVar(&n8nProject, "project", "", "GCP project ID to use")
+	cmd.Flags().StringVar(&n8nProjectName, "project-name", "", "Display name for new project")
+	cmd.Flags().BoolVar(&n8nCreateProject, "create-project", false, "Create project from --project")
+	cmd.Flags().StringVar(&n8nRegion, "region", "", "Cloud Run region (default: interactive)")
+	cmd.Flags().StringVar(&n8nServiceName, "service", "n8n", "Cloud Run service name")
+	cmd.Flags().StringVar(&n8nImage, "image", n8nDefaultImage, "n8n container image")
+	cmd.Flags().StringVar(&n8nMemory, "memory", "2Gi", "Memory limit for Cloud Run service")
+	cmd.Flags().IntVar(&n8nPort, "port", 5678, "Container port for n8n")
+	cmd.Flags().IntVar(&n8nMinInstances, "min-instances", 1, "Cloud Run minimum instances (-1 to keep current setting)")
+	cmd.Flags().BoolVar(&n8nNoCPUThrottle, "no-cpu-throttling", true, "Disable CPU throttling for more stable n8n runtime")
+	cmd.Flags().BoolVar(&n8nRedeploy, "redeploy", false, "Use project/region from saved config and redeploy existing service")
+	cmd.Flags().BoolVar(&n8nSetDefault, "set-default", false, "Save selected project/region as default config")
+	cmd.Flags().StringVar(&n8nPublicURL, "public-url", "", "Public base URL for n8n (auto-detected from service URL if empty)")
+	cmd.Flags().StringVar(&n8nDBURL, "db-url", "", "PostgreSQL URL for persistent n8n state (e.g. Supabase)")
+	cmd.Flags().StringVar(&n8nDBSchema, "db-schema", "public", "PostgreSQL schema for n8n tables")
+	cmd.Flags().BoolVar(&n8nDBSSLReject, "db-ssl-reject-unauthorized", false, "Validate DB SSL certificate (for Supabase usually false)")
+	cmd.Flags().StringVar(&n8nEncryptKey, "encryption-key", "", "N8N_ENCRYPTION_KEY (recommended: stable secret)")
+}
+
+func runLaunch(cmd *cobra.Command, args []string) error {
+	if len(args) > 0 {
+		if strings.ToLower(strings.TrimSpace(args[0])) != "n8n" {
+			return fmt.Errorf("unsupported preset %q (available: n8n)", args[0])
+		}
+	}
+	return runN8N(cmd, nil)
+}
+
+func runN8N(cmd *cobra.Command, args []string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
+	defer cancel()
+
+	tb, err := auth.GetAccessToken(ctx)
+	if err != nil {
+		return err
+	}
+
+	projectID, region, err := resolveN8NTarget(ctx, tb.AccessToken)
+	if err != nil {
+		return err
+	}
+
+	proj, err := waitProjectActive(ctx, tb.AccessToken, projectID)
+	if err != nil {
+		return err
+	}
+
+	if err := ensureRunAPI(ctx, tb.AccessToken, proj.ProjectNumber); err != nil {
+		return err
+	}
+
+	service := projectslug.Slugify(strings.TrimSpace(n8nServiceName))
+	if service == "" {
+		service = "n8n"
+	}
+	image := strings.TrimSpace(n8nImage)
+	if image == "" {
+		image = n8nDefaultImage
+	}
+
+	var existingSvc *gcprun.ServiceDetail
+	publicURL := strings.TrimSpace(n8nPublicURL)
+	svc, err := gcprun.GetService(ctx, tb.AccessToken, projectID, region, service)
+	if err == nil {
+		existingSvc = svc
+		if publicURL == "" && strings.TrimSpace(svc.URL) != "" {
+			publicURL = strings.TrimSpace(svc.URL)
+		}
+	} else if !isServiceNotFound(err) {
+		return err
+	}
+
+	existingEnv := map[string]string{}
+	if existingSvc != nil {
+		existingEnv = copyStringMap(existingSvc.Env)
+	}
+
+	dbEnv, err := resolveN8NDatabaseEnv(existingEnv)
+	if err != nil {
+		return err
+	}
+	key, err := resolveN8NEncryptionKey(existingEnv)
+	if err != nil {
+		return err
+	}
+
+	env := mergeEnv(existingEnv, buildN8NEnv(publicURL, n8nPort))
+	env = mergeEnv(env, dbEnv)
+	if strings.TrimSpace(key) != "" {
+		env["N8N_ENCRYPTION_KEY"] = strings.TrimSpace(key)
+	}
+
+	deployReq := gcprun.DeployRequest{
+		AccessToken:   tb.AccessToken,
+		ProjectID:     projectID,
+		Region:        region,
+		ServiceName:   service,
+		Image:         image,
+		ContainerPort: n8nPort,
+		Memory:        strings.TrimSpace(n8nMemory),
+		Env:           env,
+	}
+	if n8nMinInstances >= 0 {
+		v := n8nMinInstances
+		deployReq.MinInstances = &v
+	}
+	if n8nNoCPUThrottle {
+		v := false // cpuIdle=false => no CPU throttling
+		deployReq.CPUIDle = &v
+	}
+
+	fmt.Println("Deploying n8n to Cloud Run...")
+	deployed, err := gcprun.DeployService(ctx, deployReq)
+	if err != nil {
+		return err
+	}
+
+	// On first deploy we only know final service URL after creation.
+	finalURL := firstNonEmpty(strings.TrimSpace(n8nPublicURL), strings.TrimSpace(deployed.URL), strings.TrimSpace(publicURL))
+	finalEnv := mergeEnv(existingEnv, buildN8NEnv(finalURL, n8nPort))
+	finalEnv = mergeEnv(finalEnv, dbEnv)
+	if strings.TrimSpace(key) != "" {
+		finalEnv["N8N_ENCRYPTION_KEY"] = strings.TrimSpace(key)
+	}
+	if finalURL != "" && !sameStringMap(env, finalEnv) {
+		fmt.Println("Applying n8n public URL settings...")
+		deployReq.Env = finalEnv
+		deployed2, err := gcprun.DeployService(ctx, deployReq)
+		if err != nil {
+			return err
+		}
+		if strings.TrimSpace(deployed2.URL) != "" {
+			deployed = deployed2
+		}
+	}
+
+	fmt.Println("Allowing unauthenticated access...")
+	if err := gcprun.AllowUnauthenticated(ctx, tb.AccessToken, projectID, region, service); err != nil {
+		return err
+	}
+
+	fmt.Println("✓ n8n deployed")
+	if deployed.URL != "" {
+		fmt.Printf("URL: %s\n", deployed.URL)
+	} else {
+		fmt.Println("URL: not returned by API; open Cloud Run console to copy it.")
+	}
+	return nil
 }
 
 func pickOrCreateProjectForN8N(ctx context.Context, accessToken string) (string, error) {

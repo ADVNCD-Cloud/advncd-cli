@@ -16,6 +16,7 @@ import (
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/auth"
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/cloudbuild"
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/config"
+	"github.com/ADVNCD-Cloud/advncd-cli/internal/contracts"
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/gcpartifact"
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/gcprun"
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/projectslug"
@@ -48,6 +49,18 @@ var publishScanCmd = &cobra.Command{
 	RunE:  runPublishScan,
 }
 
+var deployCmd = &cobra.Command{
+	Use:   contracts.CommandDeploy,
+	Short: "Deploy app to Cloud Run using deploy YAML",
+	RunE:  runPublishDeploy,
+}
+
+var detectCmd = &cobra.Command{
+	Use:   contracts.CommandDetect,
+	Short: "Detect project profile and write deploy YAML",
+	RunE:  runPublishScan,
+}
+
 func init() {
 	publishCmd.PersistentFlags().StringVar(&publishPlanPath, "plan", publishplan.DefaultFileName, "Path to deploy plan YAML")
 	publishCmd.PersistentFlags().StringVar(&publishName, "name", "", "Cloud Run service name override")
@@ -58,6 +71,16 @@ func init() {
 
 	publishCmd.AddCommand(publishDeployCmd)
 	publishCmd.AddCommand(publishScanCmd)
+
+	deployCmd.Flags().StringVar(&publishPlanPath, "plan", publishplan.DefaultFileName, "Path to deploy plan YAML")
+	deployCmd.Flags().StringVar(&publishName, "name", "", "Cloud Run service name override")
+	deployCmd.Flags().StringVar(&publishEnvFile, "env-file", "", "Path to dotenv file (deploy runtime override)")
+	deployCmd.Flags().StringArrayVar(&publishEnv, "env", nil, "Runtime env var override/addition (KEY=VALUE), repeatable")
+
+	detectCmd.Flags().StringVar(&publishPlanPath, "plan", publishplan.DefaultFileName, "Path to deploy plan YAML")
+	detectCmd.Flags().StringVar(&publishName, "name", "", "Cloud Run service name override")
+	detectCmd.Flags().StringVar(&publishEnvFile, "env-file", "", "Path to dotenv file (scan writes it to plan env_file)")
+	detectCmd.Flags().BoolVar(&publishScanForce, "force", false, "Overwrite existing plan file")
 }
 
 func runPublishScan(cmd *cobra.Command, args []string) error {
