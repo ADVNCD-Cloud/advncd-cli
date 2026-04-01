@@ -3,9 +3,17 @@ package views
 import "time"
 
 type HomeServiceRowVM struct {
-	Name   string
-	Status string
-	URL    string
+	Name        string
+	SourceType  string
+	Status      string
+	URL         string
+	UpdatedText string
+	DetailHref  string
+	LogsURL     string
+	MetricsURL  string
+	RedeployURL string
+	DeleteURL   string
+	DisableURL  string
 }
 
 type HomeVM struct {
@@ -32,6 +40,9 @@ type HomeVM struct {
 	ServicesIssues int
 
 	Services []HomeServiceRowVM
+
+	RecentProjects []string
+	RecentRegions  []string
 }
 
 templ Home(vm HomeVM) {
@@ -45,8 +56,10 @@ templ Home(vm HomeVM) {
 
 		<div class="flex gap-2 flex-wrap justify-end">
 			<a class="btn btn-sm btn-outline" href="/services">Services</a>
+			<a class="btn btn-sm btn-outline" href="/deploy-local">Deploy Local Project</a>
 			<a class="btn btn-sm btn-ghost" href="https://console.cloud.google.com/run" target="_blank" rel="noopener">GCP Console ↗</a>
 			<button class="btn btn-sm btn-ghost" type="button" id="copy-publish">Copy: advncd publish</button>
+			<button class="btn btn-sm btn-ghost" type="button" id="copy-launch">Copy: advncd launch n8n</button>
 		</div>
 	</div>
 
@@ -56,6 +69,16 @@ document.addEventListener("click", async (e) => {
   if (!btn) return;
   try {
     await navigator.clipboard.writeText("advncd publish");
+    const prev = btn.textContent;
+    btn.textContent = "Copied ✓";
+    setTimeout(() => { btn.textContent = prev; }, 1500);
+  } catch (_) {}
+});
+document.addEventListener("click", async (e) => {
+  const btn = e.target.closest("#copy-launch");
+  if (!btn) return;
+  try {
+    await navigator.clipboard.writeText("advncd launch n8n");
     const prev = btn.textContent;
     btn.textContent = "Copied ✓";
     setTimeout(() => { btn.textContent = prev; }, 1500);
@@ -180,7 +203,7 @@ document.addEventListener("click", async (e) => {
 
 			if vm.Services == nil || len(vm.Services) == 0 {
 				<div class="mt-4 text-sm text-base-content/70">
-					No services found. Deploy one with <span class="font-mono">advncd publish</span>.
+					No services found. Deploy one with <span class="font-mono">advncd deploy</span> or open <a class="link" href="/deploy-local">Deploy Local Project</a>.
 				</div>
 			} else {
 				<div class="overflow-x-auto mt-4">
@@ -188,21 +211,33 @@ document.addEventListener("click", async (e) => {
 						<thead>
 							<tr>
 								<th>Name</th>
+								<th>Source</th>
 								<th>Status</th>
 								<th>URL</th>
+								<th>Updated</th>
+								<th></th>
 							</tr>
 						</thead>
 						<tbody>
 							for _, s := range vm.Services {
 								<tr>
 									<td>
-										<a class="link font-mono" href={"/services/" + s.Name}>{s.Name}</a>
+										<a class="link font-mono" href={s.DetailHref}>{s.Name}</a>
 									</td>
 									<td>
-										if s.Status == "READY" {
-											<span class="badge badge-success">READY</span>
+										if s.SourceType == "" {
+											<span class="text-base-content/50">—</span>
 										} else {
-											<span class="badge badge-ghost">{s.Status}</span>
+											<span class="badge badge-ghost">{s.SourceType}</span>
+										}
+									</td>
+									<td>
+										if s.Status == "ready" {
+											<span class="badge badge-success">ready</span>
+										} else if s.Status == "error" {
+											<span class="badge badge-error">error</span>
+										} else {
+											<span class="badge badge-ghost">unknown</span>
 										}
 									</td>
 									<td class="truncate max-w-xs">
@@ -211,6 +246,32 @@ document.addEventListener("click", async (e) => {
 										} else {
 											<span class="text-base-content/50">—</span>
 										}
+									</td>
+									<td class="text-xs text-base-content/70">{s.UpdatedText}</td>
+									<td class="text-right">
+										<div class="flex gap-2 flex-wrap justify-end">
+											if s.URL != "" {
+												<a class="btn btn-xs" href={s.URL} target="_blank" rel="noopener">Open</a>
+											}
+											if s.LogsURL != "" {
+												<a class="btn btn-xs btn-outline" href={s.LogsURL} target="_blank" rel="noopener">Logs</a>
+											}
+											if s.MetricsURL != "" {
+												<a class="btn btn-xs btn-outline" href={s.MetricsURL} target="_blank" rel="noopener">Metrics</a>
+											}
+											<form method="post" action={s.RedeployURL}>
+												<input type="hidden" name="return_to" value="/" />
+												<button class="btn btn-xs btn-ghost" type="submit">Redeploy</button>
+											</form>
+											<form method="post" action={s.DeleteURL} onsubmit="return confirm('Delete this service?');">
+												<input type="hidden" name="return_to" value="/" />
+												<button class="btn btn-xs btn-error btn-outline" type="submit">Delete</button>
+											</form>
+											<form method="post" action={s.DisableURL} onsubmit="return confirm('Disable public traffic for this service?');">
+												<input type="hidden" name="return_to" value="/" />
+												<button class="btn btn-xs btn-warning btn-outline" type="submit">Disable Public</button>
+											</form>
+										</div>
 									</td>
 								</tr>
 							}
@@ -228,6 +289,72 @@ document.addEventListener("click", async (e) => {
 			</div>
 		</div>
 	</div>
+
+	<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-6">
+		<div class="card bg-base-100 shadow">
+			<div class="card-body">
+				<h2 class="card-title">Context Management</h2>
+				<p class="text-sm text-base-content/70">Current execution context plus recent choices from local registry.</p>
+				<div class="mt-3 text-sm">
+					<div><span class="text-base-content/60">account:</span> <span class="font-medium">{vm.Email}</span></div>
+					<div><span class="text-base-content/60">project:</span> <span class="font-mono">{vm.ProjectID}</span></div>
+					<div><span class="text-base-content/60">region:</span> <span class="font-mono">{vm.Region}</span></div>
+				</div>
+				<div class="mt-3 text-sm">
+					<div class="text-base-content/60">recent projects</div>
+					if len(vm.RecentProjects) == 0 {
+						<div class="text-base-content/50">—</div>
+					} else {
+						<div class="flex gap-2 flex-wrap">
+							for _, p := range vm.RecentProjects {
+								<span class="badge badge-ghost">{p}</span>
+							}
+						</div>
+					}
+				</div>
+				<div class="mt-3 text-sm">
+					<div class="text-base-content/60">recent regions</div>
+					if len(vm.RecentRegions) == 0 {
+						<div class="text-base-content/50">—</div>
+					} else {
+						<div class="flex gap-2 flex-wrap">
+							for _, rg := range vm.RecentRegions {
+								<span class="badge badge-ghost">{rg}</span>
+							}
+						</div>
+					}
+				</div>
+				<div class="mt-4 text-xs text-base-content/60">To change defaults: <span class="font-mono">advncd init</span></div>
+			</div>
+		</div>
+
+		<div class="card bg-base-100 shadow">
+			<div class="card-body">
+				<h2 class="card-title">Launch Entry Points</h2>
+				<p class="text-sm text-base-content/70">Quick bridge into deploy/launch flows.</p>
+				<div class="mt-4 flex gap-2 flex-wrap">
+					<a class="btn btn-sm btn-outline" href="/deploy-local">Deploy local project</a>
+					<button class="btn btn-sm btn-ghost" type="button" id="copy-launch-inline">Copy: advncd launch n8n</button>
+				</div>
+				<div class="mt-4 text-xs text-base-content/60">
+					Also available: <span class="font-mono">advncd launch n8n</span>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<script>
+document.addEventListener("click", async (e) => {
+  const btn = e.target.closest("#copy-launch-inline");
+  if (!btn) return;
+  try {
+    await navigator.clipboard.writeText("advncd launch n8n");
+    const prev = btn.textContent;
+    btn.textContent = "Copied ✓";
+    setTimeout(() => { btn.textContent = prev; }, 1500);
+  } catch (_) {}
+});
+	</script>
 
 </div>
 }

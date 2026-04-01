@@ -7,13 +7,30 @@ type ConditionVM struct {
 	State string
 }
 
+type InsightItemVM struct {
+	Label  string
+	Value  string
+	Status string
+}
+
+type InsightBadgeVM struct {
+	Label    string
+	Severity string
+}
+
 type ServiceDetailVM struct {
 	Error string
 	Now   time.Time
 
-	Name    string
-	Project string
-	Region  string
+	Name             string
+	Project          string
+	Region           string
+	SourceType       string
+	RuntimeStatus    string
+	LastRevision     string
+	DeploymentID     string
+	SourcePathOptional string
+	PresetIDOptional string
 
 	URL   string
 	Image string
@@ -34,10 +51,21 @@ type ServiceDetailVM struct {
 	MetricsURL6h  string
 	MetricsURL24h string
 
+	RedeployURL string
+	DeleteURL   string
+	DisableURL  string
+
 	AuthStatus string // "ok" | "expired" | "missing"
 	AuthHint   string // e.g. "Run: advncd login"
 
 	ExplainText string
+
+	SafetyProfile string
+	SafetyChecks  []InsightItemVM
+	SafetyInterpretation string
+	TrafficItems  []InsightItemVM
+	CostItems     []InsightItemVM
+	Anomalies     []InsightBadgeVM
 }
 
 templ ServiceDetail(vm ServiceDetailVM) {
@@ -71,6 +99,24 @@ templ ServiceDetail(vm ServiceDetailVM) {
 			if vm.ConsoleURL != "" {
 				<a class="btn btn-sm btn-ghost" href={vm.ConsoleURL} target="_blank" rel="noopener">Console ↗</a>
 			}
+			if vm.RedeployURL != "" {
+				<form method="post" action={vm.RedeployURL}>
+					<input type="hidden" name="return_to" value={"/services/" + vm.Name} />
+					<button class="btn btn-sm btn-ghost" type="submit">Redeploy</button>
+				</form>
+			}
+			if vm.DeleteURL != "" {
+				<form method="post" action={vm.DeleteURL} onsubmit="return confirm('Delete this service?');">
+					<input type="hidden" name="return_to" value="/services" />
+					<button class="btn btn-sm btn-error btn-outline" type="submit">Delete</button>
+				</form>
+			}
+			if vm.DisableURL != "" {
+				<form method="post" action={vm.DisableURL} onsubmit="return confirm('Disable public traffic for this service?');">
+					<input type="hidden" name="return_to" value={"/services/" + vm.Name} />
+					<button class="btn btn-sm btn-warning btn-outline" type="submit">Disable Public</button>
+				</form>
+			}
 
 			// <a
 			// 	class="btn btn-sm btn-outline"
@@ -101,6 +147,62 @@ templ ServiceDetail(vm ServiceDetailVM) {
 
 	if vm.Error == "" {
 		<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+			<div class="card bg-base-100 shadow">
+				<div class="card-body">
+					<h2 class="card-title">Identity</h2>
+					<div class="text-sm mt-2">
+						<div class="text-base-content/60">service</div>
+						<div class="font-mono">{vm.Name}</div>
+					</div>
+					<div class="text-sm mt-3">
+						<div class="text-base-content/60">source_type</div>
+						if vm.SourceType != "" {
+							<div class="font-mono">{vm.SourceType}</div>
+						} else {
+							<div class="text-base-content/50">—</div>
+						}
+					</div>
+					<div class="text-sm mt-3">
+						<div class="text-base-content/60">status</div>
+						if vm.RuntimeStatus == "ready" {
+							<span class="badge badge-success">ready</span>
+						} else if vm.RuntimeStatus == "error" {
+							<span class="badge badge-error">error</span>
+						} else {
+							<span class="badge badge-ghost">unknown</span>
+						}
+					</div>
+					<div class="text-sm mt-3">
+						<div class="text-base-content/60">latest_revision</div>
+						if vm.LastRevision != "" {
+							<div class="font-mono break-all">{vm.LastRevision}</div>
+						} else {
+							<div class="text-base-content/50">—</div>
+						}
+					</div>
+					<div class="text-sm mt-3">
+						<div class="text-base-content/60">deployment_id</div>
+						if vm.DeploymentID != "" {
+							<div class="font-mono">{vm.DeploymentID}</div>
+						} else {
+							<div class="text-base-content/50">—</div>
+						}
+					</div>
+					if vm.SourcePathOptional != "" {
+						<div class="text-sm mt-3">
+							<div class="text-base-content/60">source_path</div>
+							<div class="font-mono break-all">{vm.SourcePathOptional}</div>
+						</div>
+					}
+					if vm.PresetIDOptional != "" {
+						<div class="text-sm mt-3">
+							<div class="text-base-content/60">preset_id</div>
+							<div class="font-mono">{vm.PresetIDOptional}</div>
+						</div>
+					}
+				</div>
+			</div>
+
 			<div class="card bg-base-100 shadow">
 				<div class="card-body">
 					<h2 class="card-title">Endpoint</h2>
@@ -189,6 +291,91 @@ templ ServiceDetail(vm ServiceDetailVM) {
 
 		<div class="card bg-base-100 shadow mt-4">
 			<div class="card-body">
+				<h2 class="card-title">Service Safety / Traffic / Cost</h2>
+
+				<div class="text-sm mt-2">
+					<div class="text-base-content/60">Safety profile</div>
+					if vm.SafetyProfile != "" {
+						<div class="font-mono">{vm.SafetyProfile}</div>
+					} else {
+						<div class="text-base-content/50">—</div>
+					}
+				</div>
+
+				<div class="mt-4">
+					<div class="text-sm text-base-content/60 mb-2">Anomaly Visibility</div>
+					<div class="flex gap-2 flex-wrap">
+						for _, a := range vm.Anomalies {
+							if a.Severity == "error" {
+								<span class="badge badge-error">{a.Label}</span>
+							} else if a.Severity == "warn" {
+								<span class="badge badge-warning">{a.Label}</span>
+							} else {
+								<span class="badge badge-ghost">{a.Label}</span>
+							}
+						}
+					</div>
+				</div>
+
+				<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+					<div>
+						<div class="text-sm text-base-content/60 mb-2">Safety Checks</div>
+						<div class="flex flex-col gap-2">
+							for _, it := range vm.SafetyChecks {
+								<div class="text-sm">
+									<div class="font-medium">{it.Label}</div>
+									<div class="flex items-center gap-2 mt-1">
+										if it.Status == "good" {
+											<span class="badge badge-success">good</span>
+										} else if it.Status == "caution" {
+											<span class="badge badge-warning">caution</span>
+										} else if it.Status == "danger" {
+											<span class="badge badge-error">danger</span>
+										} else {
+											<span class="badge badge-ghost">info</span>
+										}
+										<span class="text-base-content/80">{it.Value}</span>
+									</div>
+								</div>
+							}
+							if vm.SafetyInterpretation != "" {
+								<div class="text-xs text-base-content/70 mt-1">{vm.SafetyInterpretation}</div>
+							}
+						</div>
+					</div>
+
+					<div>
+						<div class="text-sm text-base-content/60 mb-2">Traffic (near-live)</div>
+						<div class="flex flex-col gap-2">
+							for _, it := range vm.TrafficItems {
+								<div class="text-sm">
+									<div class="font-medium">{it.Label}</div>
+									<div class="text-base-content/80">{it.Value}</div>
+								</div>
+							}
+						</div>
+					</div>
+
+					<div>
+						<div class="text-sm text-base-content/60 mb-2">Cost Visibility</div>
+						<div class="text-xs text-base-content/60 mb-2">
+							Estimated live cost is directional. If live runtime metrics are missing, we fall back to request + latency assumptions, which is less accurate.
+						</div>
+						<div class="flex flex-col gap-2">
+							for _, it := range vm.CostItems {
+								<div class="text-sm">
+									<div class="font-medium">{it.Label}</div>
+									<div class="text-base-content/80">{it.Value}</div>
+								</div>
+							}
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<div class="card bg-base-100 shadow mt-4">
+			<div class="card-body">
 				<h2 class="card-title">Observability</h2>
 
 				<div class="flex flex-col gap-3 mt-2">
@@ -233,15 +420,13 @@ templ ServiceDetail(vm ServiceDetailVM) {
 						<div class="text-sm text-base-content/60 mb-2">Metrics</div>
 						<div class="flex gap-2 flex-wrap">
 							if vm.AuthStatus == "ok" {
-								<a class="btn btn-xs btn-outline" href={vm.LogsURL1h} target="_blank" rel="noopener">Last 1h</a>
-								<a class="btn btn-xs btn-outline" href={vm.LogsURL6h} target="_blank" rel="noopener">Last 6h</a>
-								<a class="btn btn-xs btn-outline" href={vm.LogsURL24h} target="_blank" rel="noopener">Last 24h</a>
-								<a class="btn btn-xs btn-outline" href={vm.LogsURLErr} target="_blank" rel="noopener">Errors (1h)</a>
+								<a class="btn btn-xs btn-outline" href={vm.MetricsURL1h} target="_blank" rel="noopener">Last 1h</a>
+								<a class="btn btn-xs btn-outline" href={vm.MetricsURL6h} target="_blank" rel="noopener">Last 6h</a>
+								<a class="btn btn-xs btn-outline" href={vm.MetricsURL24h} target="_blank" rel="noopener">Last 24h</a>
 							} else {
 								<button class="btn btn-xs btn-outline btn-disabled" type="button" title={vm.AuthHint}>Last 1h</button>
 								<button class="btn btn-xs btn-outline btn-disabled" type="button" title={vm.AuthHint}>Last 6h</button>
 								<button class="btn btn-xs btn-outline btn-disabled" type="button" title={vm.AuthHint}>Last 24h</button>
-								<button class="btn btn-xs btn-outline btn-disabled" type="button" title={vm.AuthHint}>Errors (1h)</button>
 							}
 						</div>
 					</div>

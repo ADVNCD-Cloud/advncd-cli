@@ -1,0 +1,108 @@
+package views
+
+import "time"
+
+type DeployLocalVM struct {
+	Error string
+	Now   time.Time
+
+	Path       string
+	Service    string
+	Runtime    string
+	Build      string
+	Port       int
+	Confidence string
+	Warnings   []string
+
+	Project string
+	Region  string
+}
+
+templ DeployLocal(vm DeployLocalVM) {
+<div class="max-w-4xl">
+	<h1 class="text-2xl font-semibold">Deploy Local Project</h1>
+	<p class="text-base-content/70 mt-1">Bridge local code deployment through the dashboard flow.</p>
+
+	if vm.Error != "" {
+		<div class="alert alert-error mt-6">
+			<span>{vm.Error}</span>
+		</div>
+	}
+
+	<div class="card bg-base-100 shadow mt-6">
+		<div class="card-body">
+			<h2 class="card-title">Detected Profile</h2>
+			<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+				<div>
+					<div class="text-sm text-base-content/60">selected_path</div>
+					<div class="font-mono break-all">{vm.Path}</div>
+				</div>
+				<div>
+					<div class="text-sm text-base-content/60">service</div>
+					<div class="font-mono">{vm.Service}</div>
+				</div>
+				<div>
+					<div class="text-sm text-base-content/60">runtime</div>
+					<div class="font-mono">{vm.Runtime}</div>
+				</div>
+				<div>
+					<div class="text-sm text-base-content/60">build_strategy</div>
+					<div class="font-mono">{vm.Build}</div>
+				</div>
+				<div>
+					<div class="text-sm text-base-content/60">port</div>
+					<div class="font-mono">{itoa(vm.Port)}</div>
+				</div>
+				<div>
+					<div class="text-sm text-base-content/60">confidence</div>
+					<div class="font-mono">{vm.Confidence}</div>
+				</div>
+				<div>
+					<div class="text-sm text-base-content/60">target_project</div>
+					<div class="font-mono">{vm.Project}</div>
+				</div>
+				<div>
+					<div class="text-sm text-base-content/60">target_region</div>
+					<div class="font-mono">{vm.Region}</div>
+				</div>
+			</div>
+
+			if len(vm.Warnings) > 0 {
+				<div class="mt-4">
+					<div class="text-sm text-base-content/60 mb-2">warnings</div>
+					<ul class="list-disc ml-6 text-sm">
+						for _, w := range vm.Warnings {
+							<li>{w}</li>
+						}
+					</ul>
+				</div>
+			}
+
+			<div class="mt-5 flex gap-2 flex-wrap">
+				<button class="btn btn-sm btn-outline" id="copy-deploy-local" type="button" data-cmd={"advncd deploy --path " + vm.Path}>
+					Copy deploy command
+				</button>
+				<a class="btn btn-sm btn-ghost" href="/">Back to overview</a>
+			</div>
+		</div>
+	</div>
+
+	<div class="mt-4 text-xs text-base-content/50">
+		Rendered at {vm.Now.Format("2006-01-02 15:04:05")}
+	</div>
+
+	<script>
+document.addEventListener("click", async (e) => {
+  const btn = e.target.closest("#copy-deploy-local");
+  if (!btn) return;
+  const cmd = btn.getAttribute("data-cmd") || "advncd deploy";
+  try {
+    await navigator.clipboard.writeText(cmd);
+    const prev = btn.textContent;
+    btn.textContent = "Copied ✓";
+    setTimeout(() => { btn.textContent = prev; }, 1500);
+  } catch (_) {}
+});
+	</script>
+</div>
+}

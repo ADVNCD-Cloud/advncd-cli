@@ -1,0 +1,41 @@
+version: 1
+
+service:
+  name: example
+  port: 8080
+
+deploy:
+  project: telegram-bot-64a91
+  region: europe-west3
+  allow_service_rename: false
+
+build:
+  strategy: buildpacks
+
+runtime:
+  family: go
+  framework: ""
+
+env:
+  required:
+  optional:
+
+guardrails:
+  deployment_profile: default
+  cloud_run:
+    min_instances: 0
+    max_instances: 1
+    timeout_seconds: 30
+    memory: 256Mi
+  webhook:
+    require_auth: true
+    auth_mode: header
+    secret_header: X-Webhook-Secret
+    reject_query_secrets: true
+    idempotency_enabled: true
+    idempotency_ttl_seconds: 3600
+    rate_limit_per_minute: 120
+  budget:
+    enabled: false
+    amount_eur: 10
+    thresholds_csv: 0.5,0.9,1.0

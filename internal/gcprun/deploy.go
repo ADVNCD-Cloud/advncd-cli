@@ -27,10 +27,18 @@ type DeployRequest struct {
 	ServiceName   string
 	Image         string
 	Env           map[string]string
+	SecretEnv     map[string]SecretEnvRef
 	ContainerPort int
 	Memory        string
 	MinInstances  *int
+	MaxInstances  *int
+	TimeoutSec    *int
 	CPUIDle       *bool
+}
+
+type SecretEnvRef struct {
+	Secret  string
+	Version string
 }
 
 type DeployResult struct {
@@ -38,8 +46,18 @@ type DeployResult struct {
 }
 
 type envVar struct {
-	Name  string `json:"name"`
-	Value string `json:"value,omitempty"`
+	Name        string       `json:"name"`
+	Value       string       `json:"value,omitempty"`
+	ValueSource *valueSource `json:"valueSource,omitempty"`
+}
+
+type valueSource struct {
+	SecretKeyRef *secretKeyRef `json:"secretKeyRef,omitempty"`
+}
+
+type secretKeyRef struct {
+	Secret  string `json:"secret"`
+	Version string `json:"version,omitempty"`
 }
 
 type container struct {
@@ -58,6 +76,7 @@ type resources struct {
 
 type serviceScaling struct {
 	MinInstanceCount int `json:"minInstanceCount,omitempty"`
+	MaxInstanceCount int `json:"maxInstanceCount,omitempty"`
 }
 
 // Cloud Run v2 service representation (minimal)
@@ -66,7 +85,9 @@ type service struct {
 	URI      string          `json:"uri,omitempty"`
 	Scaling  *serviceScaling `json:"scaling,omitempty"`
 	Template struct {
-		Containers []container `json:"containers"`
+		Containers []container       `json:"containers"`
+		Labels     map[string]string `json:"labels,omitempty"`
+		Timeout    string            `json:"timeout,omitempty"`
 	} `json:"template,omitempty"`
 }
 
@@ -104,8 +125,24 @@ func DeployService(ctx context.Context, req DeployRequest) (*DeployResult, error
 	}
 	patchMask := "template.containers"
 	if req.MinInstances != nil {
-		current.Scaling = &serviceScaling{MinInstanceCount: *req.MinInstances}
+		if current.Scaling == nil {
+			current.Scaling = &serviceScaling{}
+		}
+		current.Scaling.MinInstanceCount = *req.MinInstances
 		patchMask += ",scaling"
+	}
+	if req.MaxInstances != nil {
+		if current.Scaling == nil {
+			current.Scaling = &serviceScaling{}
+		}
+		current.Scaling.MaxInstanceCount = *req.MaxInstances
+		if !strings.Contains(patchMask, "scaling") {
+			patchMask += ",scaling"
+		}
+	}
+	if req.TimeoutSec != nil && *req.TimeoutSec > 0 {
+		current.Template.Timeout = fmt.Sprintf("%ds", *req.TimeoutSec)
+		patchMask += ",template.timeout"
 	}
 
 	opName, err := patchService(ctx, req, current, patchMask)
@@ -188,7 +225,19 @@ func createService(ctx context.Context, req DeployRequest) (string, error) {
 		buildContainer(req),
 	}
 	if req.MinInstances != nil {
-		payload.Scaling = &serviceScaling{MinInstanceCount: *req.MinInstances}
+		if payload.Scaling == nil {
+			payload.Scaling = &serviceScaling{}
+		}
+		payload.Scaling.MinInstanceCount = *req.MinInstances
+	}
+	if req.MaxInstances != nil {
+		if payload.Scaling == nil {
+			payload.Scaling = &serviceScaling{}
+		}
+		payload.Scaling.MaxInstanceCount = *req.MaxInstances
+	}
+	if req.TimeoutSec != nil && *req.TimeoutSec > 0 {
+		payload.Template.Timeout = fmt.Sprintf("%ds", *req.TimeoutSec)
 	}
 
 	b, _ := json.Marshal(payload)
@@ -262,8 +311,8 @@ func patchService(ctx context.Context, req DeployRequest, current *service, upda
 	return "", nil
 }
 
-func buildContainerEnv(envMap map[string]string) []envVar {
-	if len(envMap) == 0 {
+func buildContainerEnv(envMap map[string]string, secretMap map[string]SecretEnvRef) []envVar {
+	if len(envMap) == 0 && len(secretMap) == 0 {
 		return nil
 	}
 
@@ -273,9 +322,34 @@ func buildContainerEnv(envMap map[string]string) []envVar {
 	}
 	sort.Strings(keys)
 
-	out := make([]envVar, 0, len(keys))
+	out := make([]envVar, 0, len(keys)+len(secretMap))
 	for _, k := range keys {
 		out = append(out, envVar{Name: k, Value: envMap[k]})
+	}
+	secretKeys := make([]string, 0, len(secretMap))
+	for k := range secretMap {
+		secretKeys = append(secretKeys, k)
+	}
+	sort.Strings(secretKeys)
+	for _, k := range secretKeys {
+		ref := secretMap[k]
+		secretName := strings.TrimSpace(ref.Secret)
+		if secretName == "" {
+			continue
+		}
+		version := strings.TrimSpace(ref.Version)
+		if version == "" {
+			version = "latest"
+		}
+		out = append(out, envVar{
+			Name: k,
+			ValueSource: &valueSource{
+				SecretKeyRef: &secretKeyRef{
+					Secret:  secretName,
+					Version: version,
+				},
+			},
+		})
 	}
 	return out
 }
@@ -286,7 +360,7 @@ func buildContainer(req DeployRequest) container {
 		Ports: []struct {
 			ContainerPort int `json:"containerPort,omitempty"`
 		}{{ContainerPort: containerPortOrDefault(req.ContainerPort)}},
-		Env: buildContainerEnv(req.Env),
+		Env: buildContainerEnv(req.Env, req.SecretEnv),
 	}
 
 	memory := strings.TrimSpace(req.Memory)

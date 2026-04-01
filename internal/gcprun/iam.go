@@ -24,6 +24,14 @@ type iamPolicy struct {
 }
 
 func AllowUnauthenticated(ctx context.Context, accessToken, projectID, region, serviceName string) error {
+	return setUnauthenticated(ctx, accessToken, projectID, region, serviceName, true)
+}
+
+func DenyUnauthenticated(ctx context.Context, accessToken, projectID, region, serviceName string) error {
+	return setUnauthenticated(ctx, accessToken, projectID, region, serviceName, false)
+}
+
+func setUnauthenticated(ctx context.Context, accessToken, projectID, region, serviceName string, allow bool) error {
 	base := fmt.Sprintf("https://run.googleapis.com/v2/projects/%s/locations/%s/services/%s", projectID, region, serviceName)
 
 	// 1) get policy
@@ -55,29 +63,46 @@ func AllowUnauthenticated(ctx context.Context, accessToken, projectID, region, s
 			WithMeta("raw_body", string(raw))
 	}
 
-	// 2) ensure binding exists
+	// 2) adjust public invoker binding
 	const role = "roles/run.invoker"
 	const member = "allUsers"
 
-	found := false
+	foundRole := false
 	for i := range pol.Bindings {
-		if pol.Bindings[i].Role == role {
-			// ensure member
-			for _, m := range pol.Bindings[i].Members {
-				if m == member {
-					found = true
-					break
+		if pol.Bindings[i].Role != role {
+			continue
+		}
+		foundRole = true
+		newMembers := make([]string, 0, len(pol.Bindings[i].Members))
+		hasMember := false
+		for _, m := range pol.Bindings[i].Members {
+			if m == member {
+				hasMember = true
+				if !allow {
+					continue
 				}
 			}
-			if !found {
-				pol.Bindings[i].Members = append(pol.Bindings[i].Members, member)
-				found = true
-			}
-			break
+			newMembers = append(newMembers, m)
 		}
+		if allow && !hasMember {
+			newMembers = append(newMembers, member)
+		}
+		pol.Bindings[i].Members = newMembers
 	}
-
-	if !found {
+	if !allow {
+		filtered := make([]struct {
+			Role    string   `json:"role"`
+			Members []string `json:"members"`
+		}, 0, len(pol.Bindings))
+		for _, b := range pol.Bindings {
+			if b.Role == role && len(b.Members) == 0 {
+				continue
+			}
+			filtered = append(filtered, b)
+		}
+		pol.Bindings = filtered
+	}
+	if allow && !foundRole {
 		pol.Bindings = append(pol.Bindings, struct {
 			Role    string   `json:"role"`
 			Members []string `json:"members"`

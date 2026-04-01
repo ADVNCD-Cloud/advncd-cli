@@ -15,9 +15,10 @@ import (
 var ErrRunList = apperr.E("D-RUN-001", "Failed to list Cloud Run services")
 
 type Service struct {
-	Name   string
-	Status string
-	URL    string
+	Name      string
+	Status    string
+	URL       string
+	UpdatedAt time.Time
 }
 
 // type Condition struct {
@@ -30,6 +31,7 @@ type listResp struct {
 		Name       string      `json:"name"`
 		URI        string      `json:"uri,omitempty"`
 		Conditions []Condition `json:"conditions,omitempty"`
+		UpdateTime string      `json:"updateTime,omitempty"`
 	} `json:"services"`
 }
 
@@ -74,13 +76,26 @@ func ListServices(ctx context.Context, accessToken, projectID, region string) ([
 		status := DeriveStatus(s.Conditions)
 
 		services = append(services, Service{
-			Name:   name,
-			Status: status,
-			URL:    s.URI,
+			Name:      name,
+			Status:    status,
+			URL:       s.URI,
+			UpdatedAt: parseRFC3339OrZero(s.UpdateTime),
 		})
 	}
 
 	return services, nil
+}
+
+func parseRFC3339OrZero(v string) time.Time {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return time.Time{}
+	}
+	t, err := time.Parse(time.RFC3339Nano, v)
+	if err != nil {
+		return time.Time{}
+	}
+	return t
 }
 
 func shortName(full string) string {

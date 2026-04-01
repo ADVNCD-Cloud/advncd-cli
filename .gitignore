@@ -5,3 +5,7 @@ advncd.exe
 .env
 test_projects/
 .gocache
+.gotmp
+.gomodcache
+__tests__/
+

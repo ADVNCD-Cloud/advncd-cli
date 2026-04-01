@@ -29,6 +29,11 @@ var (
 	publishEnv       []string
 	publishPlanPath  string
 	publishScanForce bool
+	detectPath       string
+	detectName       string
+	detectWriteYAML  bool
+	deployPath       string
+	deployName       string
 )
 
 var publishCmd = &cobra.Command{
@@ -51,14 +56,16 @@ var publishScanCmd = &cobra.Command{
 
 var deployCmd = &cobra.Command{
 	Use:   contracts.CommandDeploy,
-	Short: "Deploy app to Cloud Run using deploy YAML",
-	RunE:  runPublishDeploy,
+	Short: "Deploy app to Cloud Run",
+	Args:  cobra.NoArgs,
+	RunE:  runPrimaryDeploy,
 }
 
 var detectCmd = &cobra.Command{
 	Use:   contracts.CommandDetect,
-	Short: "Detect project profile and write deploy YAML",
-	RunE:  runPublishScan,
+	Short: "Detect deploy profile for a project",
+	Args:  cobra.NoArgs,
+	RunE:  runPrimaryDetect,
 }
 
 func init() {
@@ -72,15 +79,12 @@ func init() {
 	publishCmd.AddCommand(publishDeployCmd)
 	publishCmd.AddCommand(publishScanCmd)
 
-	deployCmd.Flags().StringVar(&publishPlanPath, "plan", publishplan.DefaultFileName, "Path to deploy plan YAML")
-	deployCmd.Flags().StringVar(&publishName, "name", "", "Cloud Run service name override")
-	deployCmd.Flags().StringVar(&publishEnvFile, "env-file", "", "Path to dotenv file (deploy runtime override)")
-	deployCmd.Flags().StringArrayVar(&publishEnv, "env", nil, "Runtime env var override/addition (KEY=VALUE), repeatable")
+	deployCmd.Flags().StringVar(&deployPath, "path", ".", "Project path to deploy")
+	deployCmd.Flags().StringVar(&deployName, "name", "", "Cloud Run service name override")
 
-	detectCmd.Flags().StringVar(&publishPlanPath, "plan", publishplan.DefaultFileName, "Path to deploy plan YAML")
-	detectCmd.Flags().StringVar(&publishName, "name", "", "Cloud Run service name override")
-	detectCmd.Flags().StringVar(&publishEnvFile, "env-file", "", "Path to dotenv file (scan writes it to plan env_file)")
-	detectCmd.Flags().BoolVar(&publishScanForce, "force", false, "Overwrite existing plan file")
+	detectCmd.Flags().StringVar(&detectPath, "path", ".", "Project path to detect")
+	detectCmd.Flags().StringVar(&detectName, "name", "", "Service name override for proposal output")
+	detectCmd.Flags().BoolVar(&detectWriteYAML, "write-yaml", false, "Write detected runtime/build/port values into advncd.yaml")
 }
 
 func runPublishScan(cmd *cobra.Command, args []string) error {
@@ -177,6 +181,17 @@ func runPublishDeploy(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	envVars := mergeStringMap(plan.Env, envFromFileAndArgs)
+	policy := resolveGuardrailsPolicy(plan.Service, nil)
+	if err := validateWebhookAndSecretPatterns(envVars, policy); err != nil {
+		return err
+	}
+	if err := validateWebhookProtectionEnv(plan.Service, envVars, policy); err != nil {
+		return err
+	}
+	plainEnv, secretEnv, err := syncSensitiveEnvToSecretManager(ctx, tb.AccessToken, cfg.ProjectID, plan.Service, envVars)
+	if err != nil {
+		return err
+	}
 
 	repo := plan.ImageRepo
 	image := buildPublishImage(cfg.Region, cfg.ProjectID, repo, plan.Service, time.Now())
@@ -253,10 +268,15 @@ func runPublishDeploy(cmd *cobra.Command, args []string) error {
 		Region:        cfg.Region,
 		ServiceName:   plan.Service,
 		Image:         image,
-		Env:           envVars,
+		Env:           plainEnv,
+		SecretEnv:     secretEnv,
 		ContainerPort: plan.Port,
 		Memory:        plan.Memory,
 		MinInstances:  plan.MinInstances,
+	}
+	deployReq = applyCloudRunGuardrails(deployReq, policy)
+	for _, w := range collectCloudRunGuardrailWarnings(deployReq, policy) {
+		fmt.Printf("warning: %s\n", w)
 	}
 	deployed, err := gcprun.DeployService(ctx, deployReq)
 	if err != nil {

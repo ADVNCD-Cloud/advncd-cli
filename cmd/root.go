@@ -43,11 +43,15 @@ func init() {
 	rootCmd.AddCommand(projectsCmd)
 	rootCmd.AddCommand(apisCmd)
 	rootCmd.AddCommand(n8nCmd)
+	rootCmd.AddCommand(serviceCmd)
+	rootCmd.AddCommand(budgetCmd)
 
 	servicesCmd.AddCommand(servicesDescribeCmd)
 	servicesCmd.AddCommand(servicesOpenCmd)
 	servicesCmd.AddCommand(servicesLogsCmd)
 	servicesCmd.AddCommand(servicesMetricsCmd)
+	servicesCmd.AddCommand(servicesDeleteCmd)
+	servicesCmd.AddCommand(servicesDisableCmd)
 	rootCmd.AddCommand(servicesCmd)
 
 	llmCmd.AddCommand(llmStatusCmd)

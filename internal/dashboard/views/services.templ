@@ -2,9 +2,21 @@ package views
 
 import (
 	"time"
-
-	"github.com/ADVNCD-Cloud/advncd-cli/internal/gcprun"
 )
+
+type ServicesRowVM struct {
+	Name        string
+	SourceType  string
+	Status      string
+	URL         string
+	UpdatedText string
+	DetailHref  string
+	LogsURL     string
+	MetricsURL  string
+	RedeployURL string
+	DeleteURL   string
+	DisableURL  string
+}
 
 type ServicesListVM struct {
 	Error string
@@ -12,7 +24,7 @@ type ServicesListVM struct {
 	Project string
 	Region  string
 
-	Services []gcprun.Service
+	Services []ServicesRowVM
 
 	Now time.Time
 }
@@ -36,22 +48,31 @@ templ ServicesList(vm ServicesListVM) {
 				<thead>
 					<tr>
 						<th>Name</th>
+						<th>Source</th>
 						<th>Status</th>
 						<th>URL</th>
+						<th>Updated</th>
 						<th></th>
 					</tr>
 				</thead>
 				<tbody>
 					for _, s := range vm.Services {
 						<tr>
-							<td class="font-mono">{s.Name}</td>
+							<td class="font-mono"><a class="link" href={s.DetailHref}>{s.Name}</a></td>
 							<td>
-								if s.Status == "READY" {
-									<span class="badge badge-success">READY</span>
-								} else if s.Status == "ERROR" {
-									<span class="badge badge-error">ERROR</span>
+								if s.SourceType != "" {
+									<span class="badge badge-ghost">{s.SourceType}</span>
 								} else {
-									<span class="badge badge-ghost">UNKNOWN</span>
+									<span class="text-base-content/50">—</span>
+								}
+							</td>
+							<td>
+								if s.Status == "ready" {
+									<span class="badge badge-success">ready</span>
+								} else if s.Status == "error" {
+									<span class="badge badge-error">error</span>
+								} else {
+									<span class="badge badge-ghost">unknown</span>
 								}
 							</td>
 							<td class="truncate max-w-xs">
@@ -63,7 +84,9 @@ templ ServicesList(vm ServicesListVM) {
 									<span class="text-base-content/50">—</span>
 								}
 							</td>
-							<td class="text-right space-x-2">
+							<td class="text-xs text-base-content/70">{s.UpdatedText}</td>
+							<td class="text-right">
+								<div class="flex gap-2 flex-wrap justify-end">
 								if s.URL != "" {
 									<a
 										class="btn btn-sm"
@@ -73,12 +96,43 @@ templ ServicesList(vm ServicesListVM) {
 										Open
 									</a>
 								}
+								if s.LogsURL != "" {
+									<a
+										class="btn btn-sm btn-outline"
+										href={s.LogsURL}
+										target="_blank"
+									>
+										Logs
+									</a>
+								}
+								if s.MetricsURL != "" {
+									<a
+										class="btn btn-sm btn-outline"
+										href={s.MetricsURL}
+										target="_blank"
+									>
+										Metrics
+									</a>
+								}
+								<form method="post" action={s.RedeployURL}>
+									<input type="hidden" name="return_to" value="/services" />
+									<button class="btn btn-sm btn-ghost" type="submit">Redeploy</button>
+								</form>
+								<form method="post" action={s.DeleteURL} onsubmit="return confirm('Delete this service?');">
+									<input type="hidden" name="return_to" value="/services" />
+									<button class="btn btn-sm btn-error btn-outline" type="submit">Delete</button>
+								</form>
+								<form method="post" action={s.DisableURL} onsubmit="return confirm('Disable public traffic for this service?');">
+									<input type="hidden" name="return_to" value="/services" />
+									<button class="btn btn-sm btn-warning btn-outline" type="submit">Disable Public</button>
+								</form>
 								<a
 									class="btn btn-sm btn-ghost"
-									href={"/services/" + s.Name}
+									href={s.DetailHref}
 								>
-									Describe
+									Details
 								</a>
+								</div>
 							</td>
 						</tr>
 					}

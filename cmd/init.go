@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -12,9 +13,12 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/ADVNCD-Cloud/advncd-cli/internal/advncdyaml"
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/auth"
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/config"
+	"github.com/ADVNCD-Cloud/advncd-cli/internal/detect"
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/gcpcrm"
+	"github.com/ADVNCD-Cloud/advncd-cli/internal/projectslug"
 )
 
 var (
@@ -103,6 +107,31 @@ var initCmd = &cobra.Command{
 		fmt.Printf("✓ Project set: %s\n", cfg.ProjectID)
 		fmt.Printf("✓ Region set:  %s\n", cfg.Region)
 		fmt.Printf("✓ Saved config: %s\n", store.Path)
+
+		wd, err := os.Getwd()
+		if err == nil {
+			written, yamlPath, yamlErr := ensureAdvncdYAML(wd, cfg.ProjectID, cfg.Region)
+			if yamlErr != nil {
+				fmt.Printf("! Failed to scaffold %s: %v\n", advncdyaml.FileName, yamlErr)
+			} else if written {
+				fmt.Printf("✓ Created %s\n", yamlPath)
+				detected, detErr := detect.Project(wd)
+				if detErr != nil {
+					fmt.Printf("! Detect after init failed: %v\n", detErr)
+				} else {
+					_, writeErr := writeDetectedYAML(wd, nil, detected.Profile, detected.ServiceProposal, cfg.ProjectID, cfg.Region)
+					if writeErr != nil {
+						fmt.Printf("! Failed to apply detected profile to %s: %v\n", yamlPath, writeErr)
+					} else {
+						fmt.Printf("✓ Applied detected runtime/build/port to %s\n", yamlPath)
+						fmt.Printf("i Detect result: runtime=%s build=%s port=%d confidence=%s\n",
+							detected.Profile.Runtime, detected.Profile.BuildStrategy, detected.Profile.Port, detected.Profile.Confidence)
+					}
+				}
+			} else {
+				fmt.Printf("i Kept existing %s\n", yamlPath)
+			}
+		}
 		return nil
 	},
 }
@@ -175,4 +204,72 @@ func readRegion() string {
 		}
 		return r
 	}
+}
+
+func ensureAdvncdYAML(rootDir, projectID, region string) (written bool, path string, err error) {
+	rootDir = strings.TrimSpace(rootDir)
+	if rootDir == "" {
+		return false, "", fmt.Errorf("root directory is required")
+	}
+	path = filepath.Join(rootDir, advncdyaml.FileName)
+
+	if _, statErr := os.Stat(path); statErr == nil {
+		return false, path, nil
+	} else if !os.IsNotExist(statErr) {
+		return false, path, statErr
+	}
+
+	serviceName := projectslug.Slugify(filepath.Base(rootDir))
+	if serviceName == "" {
+		serviceName = "app"
+	}
+
+	content := fmt.Sprintf(`version: 1
+
+service:
+  name: %s
+  port: 8080
+
+deploy:
+  project: %s
+  region: %s
+  allow_service_rename: false
+
+env:
+  required: []
+  optional: []
+
+guardrails:
+  deployment_profile: default
+  cloud_run:
+    min_instances: 0
+    max_instances: 1
+    timeout_seconds: 30
+    memory: 256Mi
+  webhook:
+    require_auth: true
+    auth_mode: header
+    secret_header: X-Webhook-Secret
+    reject_query_secrets: true
+    idempotency_enabled: true
+    idempotency_ttl_seconds: 3600
+    rate_limit_per_minute: 120
+  budget:
+    enabled: false
+    amount_eur: 10
+    thresholds_csv: 0.5,0.9,1.0
+
+# Optional explicit overrides (uncomment only when needed):
+# build:
+#   strategy: buildpacks
+#
+# runtime:
+#   family: <runtime-family>
+#   framework: <framework>
+`, serviceName, strings.TrimSpace(projectID), strings.TrimSpace(region))
+
+	if writeErr := os.WriteFile(path, []byte(content), 0o644); writeErr != nil {
+		return false, path, writeErr
+	}
+	return true, path, nil
 }

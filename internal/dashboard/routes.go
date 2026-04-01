@@ -8,6 +8,7 @@ import (
 func registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/", overviewHandler)
 	mux.HandleFunc("/services", servicesListHandler)
+	mux.HandleFunc("/deploy-local", deployLocalHandler)
 
 	// One predictable handler for everything under /services/
 	mux.HandleFunc("/services/", servicesSubrouterHandler)
@@ -38,6 +39,18 @@ func servicesSubrouterHandler(w http.ResponseWriter, r *http.Request) {
 		serviceExplainHandler(w, r)
 		return
 	}
+	if strings.HasSuffix(rel, "/redeploy") {
+		serviceRedeployHandler(w, r)
+		return
+	}
+	if strings.HasSuffix(rel, "/delete") {
+		serviceDeleteHandler(w, r)
+		return
+	}
+	if strings.HasSuffix(rel, "/disable") {
+		serviceDisableHandler(w, r)
+		return
+	}
 
 	serviceDetailHandler(w, r)
 }
@@ -55,6 +68,15 @@ func serviceNameFromPath(r *http.Request) (string, bool) {
 		rel = strings.Trim(rel, "/")
 	} else if strings.HasSuffix(rel, "/explain") {
 		rel = strings.TrimSuffix(rel, "/explain")
+		rel = strings.Trim(rel, "/")
+	} else if strings.HasSuffix(rel, "/redeploy") {
+		rel = strings.TrimSuffix(rel, "/redeploy")
+		rel = strings.Trim(rel, "/")
+	} else if strings.HasSuffix(rel, "/delete") {
+		rel = strings.TrimSuffix(rel, "/delete")
+		rel = strings.Trim(rel, "/")
+	} else if strings.HasSuffix(rel, "/disable") {
+		rel = strings.TrimSuffix(rel, "/disable")
 		rel = strings.Trim(rel, "/")
 	}
 

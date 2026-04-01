@@ -2,14 +2,18 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/ADVNCD-Cloud/advncd-cli/internal/apperr"
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/auth"
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/config"
+	"github.com/ADVNCD-Cloud/advncd-cli/internal/gcpbilling"
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/gcpcrm"
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/gcpserviceusage"
 )
@@ -22,7 +26,8 @@ var requiredGoogleAPIs = []string{
 }
 
 var (
-	apisProject string
+	apisProject        string
+	apisBillingAccount string
 )
 
 var apisCmd = &cobra.Command{
@@ -69,6 +74,8 @@ var apisEnableCmd = &cobra.Command{
 		enabledNow := make([]string, 0, len(services))
 		alreadyEnabled := make([]string, 0)
 		failed := make([]string, 0)
+		failedErrByService := map[string]error{}
+		billingLinked := false
 
 		for _, svc := range services {
 			state, err := gcpserviceusage.GetServiceState(ctx, tb.AccessToken, project.ProjectNumber, svc)
@@ -80,8 +87,33 @@ var apisEnableCmd = &cobra.Command{
 
 			fmt.Printf("%s: enabling...\n", svc)
 			if err := gcpserviceusage.EnableService(ctx, tb.AccessToken, project.ProjectNumber, svc); err != nil {
-				fmt.Printf("%s: failed\n", svc)
+				if isBillingPreconditionError(err) {
+					if !billingLinked {
+						fmt.Println("billing: Cloud API enable requires a billing account linked to this project.")
+						linkedAccount, linkErr := ensureProjectBilling(ctx, tb.AccessToken, projectID, strings.TrimSpace(apisBillingAccount))
+						if linkErr != nil {
+							fmt.Printf("billing: setup failed: %v\n", linkErr)
+						} else {
+							billingLinked = true
+							fmt.Printf("billing: linked %s\n", linkedAccount)
+						}
+					}
+
+					if billingLinked {
+						fmt.Printf("%s: retrying after billing link...\n", svc)
+						if retryErr := gcpserviceusage.EnableService(ctx, tb.AccessToken, project.ProjectNumber, svc); retryErr == nil {
+							fmt.Printf("%s: enabled\n", svc)
+							enabledNow = append(enabledNow, svc)
+							continue
+						} else {
+							err = retryErr
+						}
+					}
+				}
+
+				fmt.Printf("%s: failed (%v)\n", svc, err)
 				failed = append(failed, svc)
+				failedErrByService[svc] = err
 				continue
 			}
 
@@ -94,7 +126,11 @@ var apisEnableCmd = &cobra.Command{
 		if len(failed) > 0 {
 			fmt.Println("failed:")
 			for _, svc := range failed {
-				fmt.Printf("  - %s\n", svc)
+				if err := failedErrByService[svc]; err != nil {
+					fmt.Printf("  - %s: %v\n", svc, err)
+				} else {
+					fmt.Printf("  - %s\n", svc)
+				}
 			}
 			return fmt.Errorf("failed to enable one or more APIs")
 		}
@@ -161,5 +197,99 @@ func normalizeAPIName(raw string) string {
 
 func init() {
 	apisEnableCmd.Flags().StringVar(&apisProject, "project", "", "GCP project id override (optional)")
+	apisEnableCmd.Flags().StringVar(&apisBillingAccount, "billing-account", "", "Billing account id or full resource name (optional)")
 	apisCmd.AddCommand(apisEnableCmd)
+}
+
+func isBillingPreconditionError(err error) bool {
+	var appErr *apperr.Error
+	if !errors.As(err, &appErr) {
+		return false
+	}
+
+	text := strings.ToLower(err.Error())
+	if appErr.Meta != nil {
+		text += " " + strings.ToLower(appErr.Meta["raw_body"])
+		text += " " + strings.ToLower(appErr.Meta["operation_error"])
+	}
+
+	return strings.Contains(text, "billing-enabled") ||
+		strings.Contains(text, "billing account for project") ||
+		strings.Contains(text, "ureq_project_billing_not_found")
+}
+
+func ensureProjectBilling(ctx context.Context, accessToken, projectID, preferred string) (string, error) {
+	preferred = strings.TrimSpace(preferred)
+	if preferred != "" {
+		if err := gcpbilling.LinkProjectBilling(ctx, accessToken, projectID, preferred); err != nil {
+			return "", err
+		}
+		return normalizeBillingAccountRef(preferred), nil
+	}
+
+	accounts, err := gcpbilling.ListOpenBillingAccounts(ctx, accessToken)
+	if err != nil {
+		fmt.Printf("billing: could not list billing accounts automatically (%v)\n", err)
+		fmt.Println("billing: run `gcloud billing accounts list` if you need to discover account ids.")
+		manual, promptErr := promptLine("Enter billing account id (XXXXXX-XXXXXX-XXXXXX) or full billingAccounts/... (blank to cancel)")
+		if promptErr != nil {
+			return "", promptErr
+		}
+		manual = strings.TrimSpace(manual)
+		if manual == "" {
+			return "", err
+		}
+		if linkErr := gcpbilling.LinkProjectBilling(ctx, accessToken, projectID, manual); linkErr != nil {
+			return "", linkErr
+		}
+		return normalizeBillingAccountRef(manual), nil
+	}
+	if len(accounts) == 0 {
+		manual, promptErr := promptLine("No open billing accounts visible. Enter billing account id manually (blank to cancel)")
+		if promptErr != nil {
+			return "", promptErr
+		}
+		manual = strings.TrimSpace(manual)
+		if manual == "" {
+			return "", fmt.Errorf("no open billing accounts found")
+		}
+		if linkErr := gcpbilling.LinkProjectBilling(ctx, accessToken, projectID, manual); linkErr != nil {
+			return "", linkErr
+		}
+		return normalizeBillingAccountRef(manual), nil
+	}
+
+	sort.Slice(accounts, func(i, j int) bool {
+		left := strings.TrimSpace(strings.ToLower(accounts[i].DisplayName + " " + accounts[i].Name))
+		right := strings.TrimSpace(strings.ToLower(accounts[j].DisplayName + " " + accounts[j].Name))
+		return left < right
+	})
+
+	fmt.Println("Select billing account:")
+	for i, acc := range accounts {
+		label := strings.TrimSpace(acc.DisplayName)
+		if label == "" {
+			label = acc.Name
+		}
+		fmt.Printf("  [%d] %s (%s)\n", i+1, label, acc.Name)
+	}
+
+	choice, err := readChoice(1, len(accounts))
+	if err != nil {
+		return "", err
+	}
+	selected := accounts[choice-1].Name
+
+	if err := gcpbilling.LinkProjectBilling(ctx, accessToken, projectID, selected); err != nil {
+		return "", err
+	}
+	return selected, nil
+}
+
+func normalizeBillingAccountRef(v string) string {
+	v = strings.TrimSpace(v)
+	if strings.HasPrefix(v, "billingAccounts/") {
+		return v
+	}
+	return "billingAccounts/" + v
 }

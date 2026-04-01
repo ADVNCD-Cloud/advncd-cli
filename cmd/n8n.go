@@ -5,9 +5,12 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
@@ -23,6 +26,7 @@ import (
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/gcpcrm"
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/gcprun"
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/gcpserviceusage"
+	"github.com/ADVNCD-Cloud/advncd-cli/internal/presets"
 	"github.com/ADVNCD-Cloud/advncd-cli/internal/projectslug"
 )
 
@@ -56,43 +60,265 @@ var n8nCmd = &cobra.Command{
 
 var launchCmd = &cobra.Command{
 	Use:   contracts.CommandLaunch + " [preset]",
-	Short: "Launch a ready-made service (currently: n8n)",
+	Short: "Launch a ready-made service",
 	Args:  cobra.MaximumNArgs(1),
 	RunE:  runLaunch,
 }
 
 func init() {
-	bindN8NFlags(n8nCmd)
-	bindN8NFlags(launchCmd)
+	bindN8NFlags(n8nCmd, "n8n")
+	bindN8NFlags(launchCmd, "")
 }
 
-func bindN8NFlags(cmd *cobra.Command) {
+func bindN8NFlags(cmd *cobra.Command, defaultService string) {
 	cmd.Flags().StringVar(&n8nProject, "project", "", "GCP project ID to use")
 	cmd.Flags().StringVar(&n8nProjectName, "project-name", "", "Display name for new project")
 	cmd.Flags().BoolVar(&n8nCreateProject, "create-project", false, "Create project from --project")
 	cmd.Flags().StringVar(&n8nRegion, "region", "", "Cloud Run region (default: interactive)")
-	cmd.Flags().StringVar(&n8nServiceName, "service", "n8n", "Cloud Run service name")
+	cmd.Flags().StringVar(&n8nServiceName, "service", defaultService, "Cloud Run service name")
 	cmd.Flags().StringVar(&n8nImage, "image", n8nDefaultImage, "n8n container image")
-	cmd.Flags().StringVar(&n8nMemory, "memory", "2Gi", "Memory limit for Cloud Run service")
+	cmd.Flags().StringVar(&n8nMemory, "memory", "512Mi", "Memory limit for Cloud Run service")
 	cmd.Flags().IntVar(&n8nPort, "port", 5678, "Container port for n8n")
-	cmd.Flags().IntVar(&n8nMinInstances, "min-instances", 1, "Cloud Run minimum instances (-1 to keep current setting)")
-	cmd.Flags().BoolVar(&n8nNoCPUThrottle, "no-cpu-throttling", true, "Disable CPU throttling for more stable n8n runtime")
+	cmd.Flags().IntVar(&n8nMinInstances, "min-instances", 0, "Cloud Run minimum instances (-1 to keep current setting)")
+	cmd.Flags().BoolVar(&n8nNoCPUThrottle, "no-cpu-throttling", false, "Disable CPU throttling for more stable n8n runtime")
 	cmd.Flags().BoolVar(&n8nRedeploy, "redeploy", false, "Use project/region from saved config and redeploy existing service")
 	cmd.Flags().BoolVar(&n8nSetDefault, "set-default", false, "Save selected project/region as default config")
 	cmd.Flags().StringVar(&n8nPublicURL, "public-url", "", "Public base URL for n8n (auto-detected from service URL if empty)")
-	cmd.Flags().StringVar(&n8nDBURL, "db-url", "", "PostgreSQL URL for persistent n8n state (e.g. Supabase)")
-	cmd.Flags().StringVar(&n8nDBSchema, "db-schema", "public", "PostgreSQL schema for n8n tables")
-	cmd.Flags().BoolVar(&n8nDBSSLReject, "db-ssl-reject-unauthorized", false, "Validate DB SSL certificate (for Supabase usually false)")
+	cmd.Flags().StringVar(&n8nDBURL, "db-url", "", "PostgreSQL URL for preset database configuration (n8n, strapi)")
+	cmd.Flags().StringVar(&n8nDBSchema, "db-schema", "public", "PostgreSQL schema (used when --db-url is set)")
+	cmd.Flags().BoolVar(&n8nDBSSLReject, "db-ssl-reject-unauthorized", false, "Validate DB SSL certificate (for managed Postgres this is often false)")
 	cmd.Flags().StringVar(&n8nEncryptKey, "encryption-key", "", "N8N_ENCRYPTION_KEY (recommended: stable secret)")
 }
 
 func runLaunch(cmd *cobra.Command, args []string) error {
-	if len(args) > 0 {
-		if strings.ToLower(strings.TrimSpace(args[0])) != "n8n" {
-			return fmt.Errorf("unsupported preset %q (available: n8n)", args[0])
+	if len(args) == 0 {
+		printPresetCatalog()
+		return nil
+	}
+
+	presetID := strings.ToLower(strings.TrimSpace(args[0]))
+	preset, ok := presets.FindByID(presetID)
+	if !ok {
+		printPresetCatalog()
+		return fmt.Errorf("unsupported preset %q", presetID)
+	}
+
+	if presetID != presets.PresetN8N {
+		return runPrebuiltPreset(cmd, preset)
+	}
+
+	return runN8N(cmd, nil)
+}
+
+func runPrebuiltPreset(cmd *cobra.Command, preset contracts.PresetDefinition) error {
+	spec, ok := presets.FindLaunchSpec(preset.PresetID)
+	if !ok {
+		return fmt.Errorf("preset %q is defined but not implemented yet", preset.PresetID)
+	}
+	image := strings.TrimSpace(spec.Image)
+	if cmd.Flags().Changed("image") {
+		if override := strings.TrimSpace(n8nImage); override != "" {
+			image = override
 		}
 	}
-	return runN8N(cmd, nil)
+	if preset.PresetID == presets.PresetStrapi && !cmd.Flags().Changed("image") {
+		handled, err := maybeDeployLocalStrapiFromCWD(cmd)
+		if err != nil {
+			return err
+		}
+		if handled {
+			return nil
+		}
+		return fmt.Errorf("%s", buildStrapiLaunchGuidance(exec.LookPath))
+	}
+	if image == "" {
+		return fmt.Errorf("preset %q has empty launch image", preset.PresetID)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
+	defer cancel()
+
+	tb, err := auth.GetAccessToken(ctx)
+	if err != nil {
+		return err
+	}
+
+	projectID, region, err := resolveLaunchTarget()
+	if err != nil {
+		return err
+	}
+	proj, err := waitProjectActive(ctx, tb.AccessToken, projectID)
+	if err != nil {
+		return err
+	}
+	if err := ensureRunAPI(ctx, tb.AccessToken, proj.ProjectNumber); err != nil {
+		return err
+	}
+
+	service := projectslug.Slugify(strings.TrimSpace(n8nServiceName))
+	if service == "" {
+		base := presets.DefaultServiceName(preset.PresetID, projectID)
+		service, err = nextAvailableServiceName(ctx, tb.AccessToken, projectID, region, base)
+		if err != nil {
+			return err
+		}
+	}
+
+	presetDBEnv, err := resolvePresetDatabaseEnv(preset.PresetID)
+	if err != nil {
+		return err
+	}
+	presetRuntimeEnv := map[string]string{}
+	dbMode := ""
+	if preset.PresetID == presets.PresetStrapi {
+		presetRuntimeEnv = buildStrapiRuntimeEnv()
+		dbMode = "sqlite"
+		if len(presetDBEnv) > 0 {
+			dbMode = "postgres"
+		}
+	}
+
+	fmt.Println("launch plan:")
+	fmt.Printf("  preset: %s\n", preset.PresetID)
+	fmt.Printf("  summary: %s\n", preset.Summary)
+	fmt.Printf("  project: %s\n", projectID)
+	fmt.Printf("  region: %s\n", region)
+	fmt.Printf("  service: %s\n", service)
+	if dbMode != "" {
+		fmt.Printf("  database: %s\n", dbMode)
+	}
+	fmt.Println()
+
+	deployReq := gcprun.DeployRequest{
+		AccessToken:   tb.AccessToken,
+		ProjectID:     projectID,
+		Region:        region,
+		ServiceName:   service,
+		Image:         image,
+		ContainerPort: spec.ContainerPort,
+		Memory:        spec.Memory,
+		Env:           mergeEnv(mergeEnv(copyStringMap(spec.Env), presetRuntimeEnv), presetDBEnv),
+	}
+	policy := resolveGuardrailsPolicy(service, nil)
+	if err := validateWebhookAndSecretPatterns(deployReq.Env, policy); err != nil {
+		return err
+	}
+	if err := validateWebhookProtectionEnv(service, deployReq.Env, policy); err != nil {
+		fmt.Printf("warning: %v\n", err)
+	}
+	plainEnv, secretEnv, err := syncSensitiveEnvToSecretManager(ctx, tb.AccessToken, projectID, service, deployReq.Env)
+	if err != nil {
+		return err
+	}
+	deployReq.Env = plainEnv
+	deployReq.SecretEnv = secretEnv
+	deployReq = applyCloudRunGuardrails(deployReq, policy)
+	for _, w := range collectCloudRunGuardrailWarnings(deployReq, policy) {
+		fmt.Printf("warning: %s\n", w)
+	}
+
+	fmt.Printf("Deploying %s to Cloud Run...\n", preset.DisplayName)
+	deployed, err := gcprun.DeployService(ctx, deployReq)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("Allowing unauthenticated access...")
+	if err := gcprun.AllowUnauthenticated(ctx, tb.AccessToken, projectID, region, service); err != nil {
+		return err
+	}
+
+	status := "unknown"
+	lastRevision := ""
+	if svc, err := gcprun.GetService(ctx, tb.AccessToken, projectID, region, service); err == nil && svc != nil {
+		status = strings.ToLower(gcprun.DeriveStatus(svc.Conditions))
+		lastRevision = strings.TrimSpace(svc.LatestRevision)
+		if strings.TrimSpace(deployed.URL) == "" {
+			deployed.URL = strings.TrimSpace(svc.URL)
+		}
+	}
+
+	if err := writeDeployRecord(contracts.DeploymentRecord{
+		SourceType:       contracts.SourceTypePreset,
+		PresetIDOptional: preset.PresetID,
+		ServiceName:      service,
+		ProjectID:        projectID,
+		Region:           region,
+		URL:              strings.TrimSpace(deployed.URL),
+		Status:           status,
+		LastRevision:     lastRevision,
+	}); err != nil {
+		return err
+	}
+
+	fmt.Printf("✓ %s launched\n", preset.DisplayName)
+	if strings.TrimSpace(deployed.URL) != "" {
+		fmt.Printf("URL: %s\n", deployed.URL)
+	}
+
+	return nil
+}
+
+func maybeDeployLocalStrapiFromCWD(cmd *cobra.Command) (bool, error) {
+	root, err := resolveProjectPath(".")
+	if err != nil {
+		return false, nil
+	}
+	if !isStrapiProjectRoot(root) {
+		return false, nil
+	}
+
+	profile, yamlCfg, serviceName, err := detectWithOverrides(root, strings.TrimSpace(n8nServiceName))
+	if err != nil {
+		return true, err
+	}
+
+	projectID := ""
+	region := ""
+	if yamlCfg == nil || strings.TrimSpace(yamlCfg.Deploy.Project) == "" || strings.TrimSpace(yamlCfg.Deploy.Region) == "" {
+		projectID, region = resolveConfigTargetBestEffort()
+	}
+	yamlPath, err := writeDetectedYAML(root, yamlCfg, profile, serviceName, projectID, region)
+	if err != nil {
+		return true, err
+	}
+
+	fmt.Printf("Detected local Strapi project. Updated %s\n", yamlPath)
+	fmt.Println("Running source deploy flow...")
+
+	prevDeployPath, prevDeployName := deployPath, deployName
+	deployPath = root
+	deployName = serviceName
+	defer func() {
+		deployPath = prevDeployPath
+		deployName = prevDeployName
+	}()
+
+	if err := runPrimaryDeploy(cmd, nil); err != nil {
+		return true, err
+	}
+	return true, nil
+}
+
+func isStrapiProjectRoot(root string) bool {
+	b, err := os.ReadFile(filepath.Join(root, "package.json"))
+	if err != nil {
+		return false
+	}
+	var pkg struct {
+		Dependencies    map[string]any `json:"dependencies"`
+		DevDependencies map[string]any `json:"devDependencies"`
+	}
+	if err := json.Unmarshal(b, &pkg); err != nil {
+		return false
+	}
+	if _, ok := pkg.Dependencies["@strapi/strapi"]; ok {
+		return true
+	}
+	if _, ok := pkg.DevDependencies["@strapi/strapi"]; ok {
+		return true
+	}
+	return false
 }
 
 func runN8N(cmd *cobra.Command, args []string) error {
@@ -122,6 +348,15 @@ func runN8N(cmd *cobra.Command, args []string) error {
 	if service == "" {
 		service = "n8n"
 	}
+
+	fmt.Println("launch plan:")
+	fmt.Printf("  preset: n8n\n")
+	fmt.Printf("  summary: Workflow automation service\n")
+	fmt.Printf("  project: %s\n", projectID)
+	fmt.Printf("  region: %s\n", region)
+	fmt.Printf("  service: %s\n", service)
+	fmt.Println()
+
 	image := strings.TrimSpace(n8nImage)
 	if image == "" {
 		image = n8nDefaultImage
@@ -159,6 +394,18 @@ func runN8N(cmd *cobra.Command, args []string) error {
 		env["N8N_ENCRYPTION_KEY"] = strings.TrimSpace(key)
 	}
 
+	policy := resolveGuardrailsPolicy(service, nil)
+	if err := validateWebhookAndSecretPatterns(env, policy); err != nil {
+		return err
+	}
+	if err := validateWebhookProtectionEnv(service, env, policy); err != nil {
+		return err
+	}
+	plainEnv, secretEnv, err := syncSensitiveEnvToSecretManager(ctx, tb.AccessToken, projectID, service, env)
+	if err != nil {
+		return err
+	}
+
 	deployReq := gcprun.DeployRequest{
 		AccessToken:   tb.AccessToken,
 		ProjectID:     projectID,
@@ -167,7 +414,8 @@ func runN8N(cmd *cobra.Command, args []string) error {
 		Image:         image,
 		ContainerPort: n8nPort,
 		Memory:        strings.TrimSpace(n8nMemory),
-		Env:           env,
+		Env:           plainEnv,
+		SecretEnv:     secretEnv,
 	}
 	if n8nMinInstances >= 0 {
 		v := n8nMinInstances
@@ -176,6 +424,10 @@ func runN8N(cmd *cobra.Command, args []string) error {
 	if n8nNoCPUThrottle {
 		v := false // cpuIdle=false => no CPU throttling
 		deployReq.CPUIDle = &v
+	}
+	deployReq = applyCloudRunGuardrails(deployReq, policy)
+	for _, w := range collectCloudRunGuardrailWarnings(deployReq, policy) {
+		fmt.Printf("warning: %s\n", w)
 	}
 
 	fmt.Println("Deploying n8n to Cloud Run...")
@@ -193,7 +445,12 @@ func runN8N(cmd *cobra.Command, args []string) error {
 	}
 	if finalURL != "" && !sameStringMap(env, finalEnv) {
 		fmt.Println("Applying n8n public URL settings...")
-		deployReq.Env = finalEnv
+		plainFinalEnv, secretFinalEnv, err := syncSensitiveEnvToSecretManager(ctx, tb.AccessToken, projectID, service, finalEnv)
+		if err != nil {
+			return err
+		}
+		deployReq.Env = plainFinalEnv
+		deployReq.SecretEnv = secretFinalEnv
 		deployed2, err := gcprun.DeployService(ctx, deployReq)
 		if err != nil {
 			return err
@@ -214,7 +471,37 @@ func runN8N(cmd *cobra.Command, args []string) error {
 	} else {
 		fmt.Println("URL: not returned by API; open Cloud Run console to copy it.")
 	}
+
+	status := "unknown"
+	lastRevision := ""
+	if svc, err := gcprun.GetService(ctx, tb.AccessToken, projectID, region, service); err == nil && svc != nil {
+		status = strings.ToLower(gcprun.DeriveStatus(svc.Conditions))
+		lastRevision = strings.TrimSpace(svc.LatestRevision)
+	}
+	if err := writeDeployRecord(contracts.DeploymentRecord{
+		SourceType:       contracts.SourceTypePreset,
+		PresetIDOptional: presets.PresetN8N,
+		ServiceName:      service,
+		ProjectID:        projectID,
+		Region:           region,
+		URL:              strings.TrimSpace(deployed.URL),
+		Status:           status,
+		LastRevision:     lastRevision,
+	}); err != nil {
+		return err
+	}
+
 	return nil
+}
+
+func printPresetCatalog() {
+	fmt.Println("available presets:")
+	for _, p := range presets.List() {
+		fmt.Printf("  - %s: %s\n", p.PresetID, p.Summary)
+	}
+	fmt.Println()
+	fmt.Println("usage:")
+	fmt.Println("  advncd launch <preset>")
 }
 
 func pickOrCreateProjectForN8N(ctx context.Context, accessToken string) (string, error) {
@@ -395,6 +682,54 @@ func resolveN8NTarget(ctx context.Context, accessToken string) (string, string, 
 	return projectID, region, nil
 }
 
+func resolveLaunchTarget() (string, string, error) {
+	cfgStore, err := config.DefaultStore()
+	if err != nil {
+		return "", "", err
+	}
+	cfg, err := cfgStore.Load()
+	if err != nil {
+		return "", "", err
+	}
+
+	projectID := strings.TrimSpace(n8nProject)
+	region := strings.TrimSpace(n8nRegion)
+
+	if cfg != nil {
+		projectID = firstNonEmpty(projectID, strings.TrimSpace(cfg.ProjectID))
+		region = firstNonEmpty(region, strings.TrimSpace(cfg.Region))
+	}
+
+	if projectID == "" || region == "" {
+		return "", "", fmt.Errorf("missing project/region; run `advncd init` or provide --project and --region")
+	}
+
+	return projectID, region, nil
+}
+
+func nextAvailableServiceName(ctx context.Context, accessToken, projectID, region, base string) (string, error) {
+	base = projectslug.Slugify(strings.TrimSpace(base))
+	if base == "" {
+		base = "service"
+	}
+	candidate := base
+	for i := 0; i < 50; i++ {
+		svc, err := gcprun.GetService(ctx, accessToken, projectID, region, candidate)
+		if err == nil && svc != nil {
+			candidate = fmt.Sprintf("%s-%d", base, i+2)
+			continue
+		}
+		if isServiceNotFound(err) {
+			return candidate, nil
+		}
+		if err != nil {
+			return "", err
+		}
+		return candidate, nil
+	}
+	return "", fmt.Errorf("unable to resolve unique service name from %q", base)
+}
+
 func buildN8NEnv(publicURL string, port int) map[string]string {
 	out := map[string]string{
 		"N8N_ENDPOINT_HEALTH": "/healthz",
@@ -495,18 +830,121 @@ func resolveN8NEncryptionKey(existing map[string]string) (string, error) {
 }
 
 func postgresEnvFromURL(rawURL, schema string, sslRejectUnauthorized bool) (map[string]string, error) {
+	conn, err := parsePostgresURL(rawURL)
+	if err != nil {
+		return nil, err
+	}
+
+	out := map[string]string{
+		"DB_TYPE":                   "postgresdb",
+		"DB_POSTGRESDB_HOST":        conn.Host,
+		"DB_POSTGRESDB_PORT":        conn.Port,
+		"DB_POSTGRESDB_DATABASE":    conn.Database,
+		"DB_POSTGRESDB_USER":        conn.User,
+		"DB_POSTGRESDB_PASSWORD":    conn.Password,
+		"DB_POSTGRESDB_SSL_ENABLED": strconv.FormatBool(conn.SSLEnabled),
+	}
+	if strings.TrimSpace(schema) != "" {
+		out["DB_POSTGRESDB_SCHEMA"] = strings.TrimSpace(schema)
+	}
+	if conn.SSLEnabled {
+		out["DB_POSTGRESDB_SSL_REJECT_UNAUTHORIZED"] = strconv.FormatBool(sslRejectUnauthorized)
+	}
+	return out, nil
+}
+
+func resolvePresetDatabaseEnv(presetID string) (map[string]string, error) {
+	dbURL := strings.TrimSpace(n8nDBURL)
+	if presetID != presets.PresetStrapi {
+		if dbURL != "" {
+			return nil, fmt.Errorf("--db-url is currently supported only for `advncd launch strapi` and `advncd n8n`")
+		}
+		return map[string]string{}, nil
+	}
+	if dbURL == "" {
+		return map[string]string{}, nil
+	}
+	return strapiPostgresEnvFromURL(dbURL, strings.TrimSpace(n8nDBSchema), n8nDBSSLReject)
+}
+
+func buildStrapiRuntimeEnv() map[string]string {
+	// Keep Strapi preset startup minimal to avoid image-specific bootstrap/build failures.
+	return map[string]string{
+		"NODE_ENV": "development",
+		"HOST":     "0.0.0.0",
+	}
+}
+
+type pathLookupFunc func(file string) (string, error)
+
+func buildStrapiLaunchGuidance(lookup pathLookupFunc) string {
+	var toolWarnings []string
+	if _, err := lookup("node"); err != nil {
+		toolWarnings = append(toolWarnings, "  - `node` is not installed or not found in PATH. Install Node.js LTS first.")
+	}
+	if _, err := lookup("npx"); err != nil {
+		toolWarnings = append(toolWarnings, "  - `npx` is not installed or not found in PATH. Reinstall Node.js/npm or add npm bin to PATH.")
+	}
+
+	msg := "`advncd launch strapi` currently needs an explicit working image.\n" +
+		"Recommended workaround:\n" +
+		"  npx create-strapi-app@latest my-strapi --quickstart\n" +
+		"  cd my-strapi\n" +
+		"  advncd deploy --path . --name <service>\n\n" +
+		"Alternative:\n" +
+		"  advncd launch strapi --image <your-strapi-image>"
+
+	if len(toolWarnings) > 0 {
+		msg += "\n\nLocal tooling check:\n" + strings.Join(toolWarnings, "\n")
+	}
+	return msg
+}
+
+func strapiPostgresEnvFromURL(rawURL, schema string, sslRejectUnauthorized bool) (map[string]string, error) {
+	conn, err := parsePostgresURL(rawURL)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]string{
+		"DATABASE_CLIENT":   "postgres",
+		"DATABASE_HOST":     conn.Host,
+		"DATABASE_PORT":     conn.Port,
+		"DATABASE_NAME":     conn.Database,
+		"DATABASE_USERNAME": conn.User,
+		"DATABASE_PASSWORD": conn.Password,
+		"DATABASE_SSL":      strconv.FormatBool(conn.SSLEnabled),
+	}
+	if strings.TrimSpace(schema) != "" {
+		out["DATABASE_SCHEMA"] = strings.TrimSpace(schema)
+	}
+	if conn.SSLEnabled {
+		out["DATABASE_SSL_REJECT_UNAUTHORIZED"] = strconv.FormatBool(sslRejectUnauthorized)
+	}
+	return out, nil
+}
+
+type postgresConnection struct {
+	Host       string
+	Port       string
+	Database   string
+	User       string
+	Password   string
+	SSLEnabled bool
+}
+
+func parsePostgresURL(rawURL string) (postgresConnection, error) {
 	u, err := url.Parse(strings.TrimSpace(rawURL))
 	if err != nil {
-		return nil, fmt.Errorf("invalid --db-url: %w", err)
+		return postgresConnection{}, fmt.Errorf("invalid --db-url: %w", err)
 	}
 	scheme := strings.ToLower(strings.TrimSpace(u.Scheme))
 	if scheme != "postgres" && scheme != "postgresql" {
-		return nil, fmt.Errorf("invalid --db-url scheme %q: expected postgres:// or postgresql://", u.Scheme)
+		return postgresConnection{}, fmt.Errorf("invalid --db-url scheme %q: expected postgres:// or postgresql://", u.Scheme)
 	}
 
 	host := strings.TrimSpace(u.Hostname())
 	if host == "" {
-		return nil, fmt.Errorf("invalid --db-url: missing host")
+		return postgresConnection{}, fmt.Errorf("invalid --db-url: missing host")
 	}
 	port := strings.TrimSpace(u.Port())
 	if port == "" {
@@ -515,7 +953,7 @@ func postgresEnvFromURL(rawURL, schema string, sslRejectUnauthorized bool) (map[
 
 	dbName := strings.TrimPrefix(strings.TrimSpace(u.Path), "/")
 	if dbName == "" {
-		return nil, fmt.Errorf("invalid --db-url: missing database name in path")
+		return postgresConnection{}, fmt.Errorf("invalid --db-url: missing database name in path")
 	}
 
 	user := ""
@@ -526,31 +964,21 @@ func postgresEnvFromURL(rawURL, schema string, sslRejectUnauthorized bool) (map[
 		pass = strings.TrimSpace(pass)
 	}
 	if user == "" {
-		return nil, fmt.Errorf("invalid --db-url: missing username")
+		return postgresConnection{}, fmt.Errorf("invalid --db-url: missing username")
 	}
 	if pass == "" {
-		return nil, fmt.Errorf("invalid --db-url: missing password")
+		return postgresConnection{}, fmt.Errorf("invalid --db-url: missing password")
 	}
 
 	sslMode := strings.ToLower(strings.TrimSpace(u.Query().Get("sslmode")))
-	sslEnabled := sslMode != "disable"
-
-	out := map[string]string{
-		"DB_TYPE":                   "postgresdb",
-		"DB_POSTGRESDB_HOST":        host,
-		"DB_POSTGRESDB_PORT":        port,
-		"DB_POSTGRESDB_DATABASE":    dbName,
-		"DB_POSTGRESDB_USER":        user,
-		"DB_POSTGRESDB_PASSWORD":    pass,
-		"DB_POSTGRESDB_SSL_ENABLED": strconv.FormatBool(sslEnabled),
-	}
-	if strings.TrimSpace(schema) != "" {
-		out["DB_POSTGRESDB_SCHEMA"] = strings.TrimSpace(schema)
-	}
-	if sslEnabled {
-		out["DB_POSTGRESDB_SSL_REJECT_UNAUTHORIZED"] = strconv.FormatBool(sslRejectUnauthorized)
-	}
-	return out, nil
+	return postgresConnection{
+		Host:       host,
+		Port:       port,
+		Database:   dbName,
+		User:       user,
+		Password:   pass,
+		SSLEnabled: sslMode != "disable",
+	}, nil
 }
 
 func promptYesNo(question string, defaultYes bool) (bool, error) {

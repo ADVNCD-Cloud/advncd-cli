@@ -2,23 +2,32 @@
 
 Advncd CLI is a local-first developer tool for shipping workloads to Google Cloud Run without relying on `gcloud` in your daily loop.
 
-It combines authentication, project setup, deploy, operations links, and n8n provisioning into one CLI.
+It combines authentication, project setup, detection, deploy, registry persistence, operations links, and n8n provisioning into one CLI.
 
 ## Why Advncd
 
 - Faster cloud onboarding: log in once, keep local credentials, and stop copy-pasting setup commands.
-- Opinionated deploy path: build and publish a Go service to Cloud Run in one command.
+- Predictable detection + deploy path: inspect runtime/build/port/confidence before shipping.
 - One-command n8n hosting: deploy or redeploy n8n with Cloud Run-safe defaults.
 - Better operations workflow: open logs, metrics, service details, and local dashboard instantly.
+- Stable local service memory: persist deployment records in a local registry.
 - Human-readable errors: structured messages with clear fixes.
 
 ## What You Can Do
 
 - Authenticate via browser through the Advncd OAuth broker backend.
 - Persist and auto-refresh app tokens, then mint short-lived GCP access tokens on demand.
+- Detect deploy profile for a local project (`advncd detect`).
+- Deploy app code with explicit project path + service name (`advncd deploy --path --name`).
+- Launch ready-made services with `advncd launch <preset>` (real: `n8n`, `strapi`; demo presets also available).
+- Read `advncd.yaml` overrides for service/deploy/build/runtime/env requirements.
+- Enforce deployment guardrails: low-cost Cloud Run defaults, webhook safety checks, and query-secret rejection.
+- Sync sensitive runtime env values to Google Secret Manager during deploy flows.
+- Bootstrap billing budgets and alert thresholds from CLI.
+- Trigger emergency service kill switch with `advncd service disable` / `advncd services disable`.
 - Pick or create a GCP project for n8n deployment.
-- Deploy Go apps to Cloud Run through Cloud Build + Artifact Registry.
 - Manage Cloud Run services (list/describe/open/logs/metrics).
+- Persist deployment records to local registry (`registry.json`) using stable service identity.
 - Explain Cloud Run service health with local LLM (Ollama).
 - Launch a local dashboard for service overview and troubleshooting.
 
@@ -50,14 +59,21 @@ Download the binary for your OS/arch from GitHub Releases and add it to your `PA
 ./advncd init
 ```
 
-3. Generate deploy plan and deploy your app (any stack supported by Buildpacks):
+`init` also scaffolds `advncd.yaml` in the current directory if it does not already exist, then runs detection and writes detected runtime/build/port into that new file.
+
+3. Detect your project profile:
 
 ```bash
-./advncd publish scan
-./advncd publish
+./advncd detect --path .
 ```
 
-4. Check service status:
+4. Deploy:
+
+```bash
+./advncd deploy --path . --name my-service
+```
+
+5. Check service status:
 
 ```bash
 ./advncd services
@@ -106,6 +122,66 @@ You can override it any time:
 ./advncd n8n --image n8nio/n8n:latest
 ```
 
+## Next.js Deploy Example
+
+From the repo root of your Next.js app:
+
+```bash
+# 1) Check detection result first
+./advncd detect --path .
+
+# 2) Deploy to Cloud Run
+./advncd deploy --path . --name my-nextjs-app
+```
+
+From outside the app directory:
+
+```bash
+./advncd detect --path /absolute/path/to/nextjs-app
+./advncd deploy --path /absolute/path/to/nextjs-app --name my-nextjs-app
+```
+
+If you add `advncd.yaml` in the app root, `deploy.project`, `deploy.region`, `service.name`, `service.port`, `build.strategy`, and runtime hints are applied as overrides.
+
+## Cloud Safety & Cost Guard
+
+Sprint goal: safe-by-default and cost-controlled-by-default deployments.
+
+Current v0.1 behavior:
+- Deploy flows apply Cloud Run defaults when unset: `min-instances=0`, `max-instances=1`, `timeout=30s`, memory profile defaults (`256Mi` for lightweight presets and safety profile).
+- Sensitive env keys are automatically moved to Secret Manager references during deploy (`TOKEN`, `SECRET`, `PASSWORD`, `DB_URL`, `DATABASE_URL`, `CRON_SECRET`, etc.).
+- Query-string secret patterns are blocked in env values (for example `...?token=...` / `...?secret=...`).
+- Webhook-low-traffic profile requires explicit webhook protection inputs (header/path auth + secret env key), with reusable middleware in `internal/safety/webhook.go`.
+- Emergency kill switch command is available: `advncd service disable <name>` (or `advncd services disable <name>`).
+- Budget bootstrap command is available: `advncd budget init --amount-eur 10 --thresholds 0.5,0.9,1.0`.
+
+Detailed notes:
+- [`docs/CLOUD_SAFETY_GUARD.md`](docs/CLOUD_SAFETY_GUARD.md)
+
+Example `advncd.yaml` guardrails block:
+
+```yaml
+guardrails:
+  deployment_profile: webhook-low-traffic
+  cloud_run:
+    min_instances: 0
+    max_instances: 1
+    timeout_seconds: 30
+    memory: 256Mi
+  webhook:
+    require_auth: true
+    auth_mode: header
+    secret_header: X-Webhook-Secret
+    reject_query_secrets: true
+    idempotency_enabled: true
+    idempotency_ttl_seconds: 3600
+    rate_limit_per_minute: 120
+  budget:
+    enabled: true
+    amount_eur: 10
+    thresholds_csv: 0.5,0.9,1.0
+```
+
 ## Command Reference
 
 ### Core
@@ -136,6 +212,7 @@ Revoke app session in auth broker and delete local credentials.
 
 #### `advncd init`
 Set default project and region (interactive if omitted).
+If `advncd.yaml` is missing in the current directory, it creates it and applies detected runtime/build/port values automatically.
 
 Flags:
 - `--project`: set project ID directly.
@@ -166,35 +243,39 @@ Example:
 
 ### Deploy Services (Any Buildpacks Stack)
 
-#### `advncd publish`
-Build and deploy current app to Cloud Run using `advncd.deploy.yaml`.
+#### `advncd detect`
+Detect deploy profile for a project and print:
+- runtime
+- build strategy
+- port
+- confidence
+- warnings
+- service name proposal
+
+Flags:
+- `--path`: project path (default `.`)
+- `--name`: service name override for proposal output
+- `--write-yaml`: write detected runtime/build/port values into `advncd.yaml`
+
+Examples:
+
+```bash
+./advncd detect --path .
+./advncd detect --path ./apps/web --name web-api
+./advncd detect --path . --write-yaml
+```
+
+#### `advncd deploy`
+Primary deploy flow for local app code.
 
 Requirements:
 - Project and region must be set (`advncd init`).
-- If `advncd.deploy.yaml` is missing, CLI starts a setup wizard and creates it.
+- If confidence is not high, CLI asks for confirmation before executing.
+- Writes/updates a deployment record in local registry after successful deploy.
 
 Flags:
-- `--plan`: path to deploy plan YAML (default `advncd.deploy.yaml`).
-- `--name`: Cloud Run service name override.
-- `--env-file`: dotenv file with runtime variables (overrides `env_file` from plan at deploy time; also can be used with `publish scan` to set plan `env_file`).
-- `--env`: extra `KEY=VALUE` values (repeatable). Overrides plan env and `--env-file`.
-
-#### `advncd publish scan`
-Scan current project and generate `advncd.deploy.yaml`.
-
-`env_file` behavior:
-- Auto-detects `env_file` from project root with priority: `.env.production` -> `.env.prod` -> `.env`.
-- You can force plan value: `advncd publish scan --env-file .env.staging`.
-
-Auto-detects stack heuristically:
-- Frontend SSR: Next.js, Nuxt, SvelteKit, Remix, Astro, Angular SSR
-- Frontend SPA: Vite-based apps
-- Node backends: NestJS, Express, Fastify, Koa, Hono
-- Python backends: FastAPI, Flask, Django
-- Go backends: Gin, Echo, Fiber
-- JVM backends: Spring Boot, Quarkus, Micronaut, Ktor
-- Others: .NET, Rails/Sinatra, Laravel/Symfony, Rust, Elixir
-- Fallbacks: node/python/java/php/ruby/unknown
+- `--path`: project path to deploy (default `.`)
+- `--name`: Cloud Run service name override
 
 Full matrix with detection markers:
 - [`docs/STACK_MATRIX.md`](docs/STACK_MATRIX.md)
@@ -202,13 +283,32 @@ Full matrix with detection markers:
 Examples:
 
 ```bash
-./advncd publish scan
-./advncd publish
-./advncd publish --plan ./deploy/prod.yaml
-./advncd publish scan --force --name api
-./advncd publish scan --force --env-file .env.staging
-./advncd publish --env-file .env.production
-./advncd publish --env FOO=bar --env LOG_LEVEL=info
+./advncd deploy --path .
+./advncd deploy --path ./apps/api --name api-prod
+```
+
+#### `advncd publish` (legacy compatibility path)
+Legacy plan-based deploy flow using `advncd.deploy.yaml` remains available for existing users.
+
+#### `advncd launch <preset>`
+Launch ready-made services through the primary launch verb.
+
+Current preset support:
+- `n8n`
+- `strapi`
+- `telegram-bot` (demo preset)
+- `webhook` (demo preset)
+- `simple-api` (demo preset)
+- `static-site` (demo preset)
+
+Examples:
+
+```bash
+./advncd launch n8n --set-default
+./advncd launch n8n --redeploy
+./advncd launch strapi
+./advncd launch strapi --db-url "postgresql://USER:PASSWORD@HOST:5432/DBNAME?sslmode=require"
+./advncd launch strapi --image naskio/strapi:latest
 ```
 
 ### n8n on Cloud Run
@@ -223,10 +323,10 @@ Flags:
 - `--region`: Cloud Run region.
 - `--service`: Cloud Run service name (default `n8n`).
 - `--image`: container image (default `n8nio/n8n:1.86.0`).
-- `--memory`: memory limit (default `2Gi`).
+- `--memory`: memory limit (default `512Mi`).
 - `--port`: container port (default `5678`).
-- `--min-instances`: Cloud Run min instances (default `1`, use `-1` to keep current).
-- `--no-cpu-throttling`: disable CPU throttling (default `true`).
+- `--min-instances`: Cloud Run min instances (default `0`, use `-1` to keep current).
+- `--no-cpu-throttling`: disable CPU throttling (default `false`).
 - `--redeploy`: use saved project/region and redeploy existing service.
 - `--set-default`: save selected project/region as default config.
 - `--public-url`: public base URL for n8n.
@@ -263,6 +363,43 @@ Open Cloud Monitoring metrics view for the service.
 #### `advncd services explain <service>`
 Use LLM provider to explain service conditions and likely causes.
 
+#### `advncd services delete <service>`
+Delete a Cloud Run service.
+
+Flags:
+- `--yes`: skip confirmation prompt.
+
+#### `advncd services disable <service>`
+Emergency kill switch to stop public traffic quickly.
+
+Behavior:
+- default mode: removes `allUsers` invoker binding (service remains deployed but public access is cut off).
+- `--hard`: requests full Cloud Run service deletion.
+
+Flags:
+- `--yes`: skip confirmation prompt.
+- `--hard`: hard kill switch (delete service).
+
+Alias:
+- `advncd service disable <service>`
+
+### Budget Guardrails
+
+#### `advncd budget init`
+Create a billing budget for the active project.
+
+Flags:
+- `--amount-eur`: budget amount in EUR (default `10.0`).
+- `--thresholds`: csv thresholds (default `0.5,0.9,1.0`).
+- `--billing-account`: explicit billing account id/name.
+- `--display-name`: optional custom budget display name.
+
+Example:
+
+```bash
+./advncd budget init --amount-eur 10 --thresholds 0.5,0.9,1.0
+```
+
 ### LLM
 
 #### `advncd llm status`
@@ -272,6 +409,12 @@ Show active LLM provider/model/base URL and basic connectivity check for Ollama.
 
 #### `advncd dashboard`
 Run local dashboard HTTP server and open it in browser.
+
+Service detail now includes:
+- Service Safety / Traffic / Cost panel
+- Near-live traffic indicators (request volume, RPM, latency, error rate, instance activity)
+- Estimated live cost and explicit actual-billed-cost status
+- Anomaly badges and quick `Disable Public` incident action
 
 ### Auth Utilities
 
@@ -297,12 +440,33 @@ Advncd stores data under `os.UserConfigDir()/advncd`:
 
 - `credentials.json`: auth broker app tokens + metadata.
 - `config.json`: selected project/region defaults.
+- `registry.json`: deployment records (local service memory for dashboard/operations).
 
 File permissions are restricted by the CLI (`0700` directory, `0600` files where applicable).
 
 Recommended:
 - Never commit `.env` with secrets.
 - Use a stable external Postgres and `N8N_ENCRYPTION_KEY` for production n8n.
+
+## Service Identity in One Project
+
+Services are differentiated by stable identity:
+
+```text
+service_name + project_id + region
+```
+
+What this means in practice:
+- Same project/region, different `service_name` -> separate Cloud Run services.
+- Same `service_name` + same project/region -> treated as the same service (redeploy/update path).
+- Different region (even same service name) -> different service identity.
+
+Use `--name` on deploy (or `service.name` in `advncd.yaml`) to keep each app separated clearly:
+
+```bash
+./advncd deploy --path ./apps/web --name web-frontend
+./advncd deploy --path ./apps/api --name backend-api
+```
 
 ## Typical Flows
 
@@ -311,7 +475,8 @@ Go service deploy:
 ```bash
 ./advncd login
 ./advncd init
-./advncd publish
+./advncd detect --path .
+./advncd deploy --path . --name my-service
 ./advncd services
 ```
 

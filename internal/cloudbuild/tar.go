@@ -2,13 +2,13 @@ package cloudbuild
 
 import (
 	"archive/tar"
+	"bytes"
 	"compress/gzip"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
-	"bytes"
 )
 
 func writeTarGz(w io.Writer, dir string) error {
@@ -22,6 +22,11 @@ func writeTarGz(w io.Writer, dir string) error {
 	exclude := func(rel string) bool {
 		rel = filepath.ToSlash(rel)
 		if rel == ".git" || strings.HasPrefix(rel, ".git/") {
+			return true
+		}
+		// node_modules is rebuilt by buildpacks; archiving it is slow and can break tar
+		// extraction because of many symlinks from local package managers.
+		if hasPathSegment(rel, "node_modules") {
 			return true
 		}
 		if rel == "advncd" || strings.HasPrefix(rel, "advncd/") {
@@ -51,7 +56,15 @@ func writeTarGz(w io.Writer, dir string) error {
 			return nil
 		}
 
-		hdr, err := tar.FileInfoHeader(info, "")
+		linkName := ""
+		if info.Mode()&os.ModeSymlink != 0 {
+			linkName, err = os.Readlink(path)
+			if err != nil {
+				return err
+			}
+		}
+
+		hdr, err := tar.FileInfoHeader(info, linkName)
 		if err != nil {
 			return err
 		}
@@ -83,4 +96,14 @@ func TarGzBytes(dir string) ([]byte, error) {
 		return nil, err
 	}
 	return buf.Bytes(), nil
+}
+
+func hasPathSegment(rel, segment string) bool {
+	parts := strings.Split(filepath.ToSlash(rel), "/")
+	for _, p := range parts {
+		if p == segment {
+			return true
+		}
+	}
+	return false
 }
