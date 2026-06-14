@@ -24,9 +24,11 @@ func writeTarGz(w io.Writer, dir string) error {
 		if rel == ".git" || strings.HasPrefix(rel, ".git/") {
 			return true
 		}
-		// node_modules is rebuilt by buildpacks; archiving it is slow and can break tar
-		// extraction because of many symlinks from local package managers.
+		// node_modules and vendor are rebuilt by buildpacks; archiving them is slow.
 		if hasPathSegment(rel, "node_modules") {
+			return true
+		}
+		if hasPathSegment(rel, "vendor") {
 			return true
 		}
 		if rel == "advncd" || strings.HasPrefix(rel, "advncd/") {

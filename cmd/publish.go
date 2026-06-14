@@ -38,13 +38,13 @@ var (
 
 var publishCmd = &cobra.Command{
 	Use:   "publish",
-	Short: "Build and deploy the current app to Cloud Run",
+	Short: "Advanced deploy: env vars, Secret Manager, and full Cloud Run control",
 	RunE:  runPublishDeploy,
 }
 
 var publishDeployCmd = &cobra.Command{
 	Use:   "deploy",
-	Short: "Deploy app to Cloud Run using deploy YAML",
+	Short: "Deploy using the deploy plan YAML",
 	RunE:  runPublishDeploy,
 }
 
@@ -56,7 +56,7 @@ var publishScanCmd = &cobra.Command{
 
 var deployCmd = &cobra.Command{
 	Use:   contracts.CommandDeploy,
-	Short: "Deploy app to Cloud Run",
+	Short: "Zero-config deploy from advncd.yaml to Cloud Run",
 	Args:  cobra.NoArgs,
 	RunE:  runPrimaryDeploy,
 }

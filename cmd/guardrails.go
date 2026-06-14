@@ -87,6 +87,9 @@ func applyCloudRunGuardrails(req gcprun.DeployRequest, pol safety.Policy) gcprun
 	if strings.TrimSpace(req.Memory) == "" {
 		req.Memory = strings.TrimSpace(pol.CloudRun.Memory)
 	}
+	if req.CPUIDle == nil {
+		req.CPUIDle = boolPtr(true)
+	}
 	return req
 }
 
@@ -223,7 +226,8 @@ func secretIDForEnv(serviceName, key string) string {
 	return strings.Trim(base, "-")
 }
 
-func intPtr(v int) *int { return &v }
+func intPtr(v int) *int   { return &v }
+func boolPtr(v bool) *bool { return &v }
 
 func parseThresholdsCSV(csv string, fallback []float64) []float64 {
 	parts := strings.Split(csv, ",")
