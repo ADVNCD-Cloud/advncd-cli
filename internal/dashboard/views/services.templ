@@ -30,11 +30,16 @@ type ServicesListVM struct {
 }
 
 templ ServicesList(vm ServicesListVM) {
-<div class="max-w-5xl">
-	<h1 class="text-2xl font-semibold">Services</h1>
-	<p class="text-base-content/70 mt-1">
-		Cloud Run services in {vm.Project} ({vm.Region})
-	</p>
+<div class="max-w-6xl">
+	<div class="flex items-start justify-between gap-4">
+		<div>
+			<h1 class="text-2xl font-semibold" style="color:#ffffff;">Services</h1>
+			<p class="mt-1 text-sm" style="color:#8b7fa8;">
+				Cloud Run · <span class="font-mono" style="color:#b0f0ff;">{vm.Project}</span> · <span class="font-mono" style="color:#b0f0ff;">{vm.Region}</span>
+			</p>
+		</div>
+		<a class="btn btn-sm btn-outline" href="/">← Overview</a>
+	</div>
 
 	if vm.Error != "" {
 		<div class="alert alert-error mt-6">
@@ -43,105 +48,95 @@ templ ServicesList(vm ServicesListVM) {
 	}
 
 	if vm.Error == "" {
-		<div class="overflow-x-auto mt-6">
-			<table class="table table-zebra">
-				<thead>
-					<tr>
-						<th>Name</th>
-						<th>Source</th>
-						<th>Status</th>
-						<th>URL</th>
-						<th>Updated</th>
-						<th></th>
-					</tr>
-				</thead>
-				<tbody>
-					for _, s := range vm.Services {
-						<tr>
-							<td class="font-mono"><a class="link" href={s.DetailHref}>{s.Name}</a></td>
-							<td>
-								if s.SourceType != "" {
-									<span class="badge badge-ghost">{s.SourceType}</span>
-								} else {
-									<span class="text-base-content/50">—</span>
+		if vm.Services == nil || len(vm.Services) == 0 {
+			<div class="card mt-6">
+				<div class="card-body" style="padding:1.5rem;">
+					<p style="color:#8b7fa8;font-size:0.9rem;">No services found in this project and region.</p>
+					<p style="color:#8b7fa8;font-size:0.85rem;margin-top:0.5rem;">Deploy one with <code>advncd deploy</code> or use <a class="link" href="/deploy-local">Deploy Local</a>.</p>
+				</div>
+			</div>
+		} else {
+			<div class="card mt-6">
+				<div class="card-body" style="padding:1.25rem;">
+					<div class="overflow-x-auto">
+						<table class="table table-zebra">
+							<thead>
+								<tr>
+									<th>Name</th>
+									<th>Source</th>
+									<th>Status</th>
+									<th>URL</th>
+									<th>Updated</th>
+									<th></th>
+								</tr>
+							</thead>
+							<tbody>
+								for _, s := range vm.Services {
+									<tr>
+										<td>
+											<a class="link font-mono" href={s.DetailHref} style="font-size:0.85rem;">{s.Name}</a>
+										</td>
+										<td>
+											if s.SourceType != "" {
+												<span class="badge badge-ghost">{s.SourceType}</span>
+											} else {
+												<span style="color:#8b7fa8;">—</span>
+											}
+										</td>
+										<td>
+											if s.Status == "ready" {
+												<span class="badge badge-success">ready</span>
+											} else if s.Status == "error" {
+												<span class="badge badge-error">error</span>
+											} else {
+												<span class="badge badge-ghost">unknown</span>
+											}
+										</td>
+										<td class="truncate max-w-xs" style="font-size:0.8rem;">
+											if s.URL != "" {
+												<a class="link" href={s.URL} target="_blank" rel="noopener">{s.URL}</a>
+											} else {
+												<span style="color:#8b7fa8;">—</span>
+											}
+										</td>
+										<td style="font-size:0.75rem;color:#8b7fa8;">{s.UpdatedText}</td>
+										<td class="text-right">
+											<div class="flex gap-1 flex-wrap justify-end">
+												if s.URL != "" {
+													<a class="btn btn-xs btn-outline" href={s.URL} target="_blank" rel="noopener">Open</a>
+												}
+												if s.LogsURL != "" {
+													<a class="btn btn-xs btn-ghost" href={s.LogsURL} target="_blank" rel="noopener">Logs</a>
+												}
+												if s.MetricsURL != "" {
+													<a class="btn btn-xs btn-ghost" href={s.MetricsURL} target="_blank" rel="noopener">Metrics</a>
+												}
+												<form method="post" action={s.RedeployURL}>
+													<input type="hidden" name="return_to" value="/services" />
+													<button class="btn btn-xs btn-ghost" type="submit">Redeploy</button>
+												</form>
+												<form method="post" action={s.DeleteURL} onsubmit="return confirm('Delete this service?');">
+													<input type="hidden" name="return_to" value="/services" />
+													<button class="btn btn-xs btn-error btn-outline" type="submit">Delete</button>
+												</form>
+												<form method="post" action={s.DisableURL} onsubmit="return confirm('Disable public traffic for this service?');">
+													<input type="hidden" name="return_to" value="/services" />
+													<button class="btn btn-xs btn-warning btn-outline" type="submit">Disable</button>
+												</form>
+												<a class="btn btn-xs btn-ghost" href={s.DetailHref}>Details</a>
+											</div>
+										</td>
+									</tr>
 								}
-							</td>
-							<td>
-								if s.Status == "ready" {
-									<span class="badge badge-success">ready</span>
-								} else if s.Status == "error" {
-									<span class="badge badge-error">error</span>
-								} else {
-									<span class="badge badge-ghost">unknown</span>
-								}
-							</td>
-							<td class="truncate max-w-xs">
-								if s.URL != "" {
-									<a class="link" href={s.URL} target="_blank">
-										{s.URL}
-									</a>
-								} else {
-									<span class="text-base-content/50">—</span>
-								}
-							</td>
-							<td class="text-xs text-base-content/70">{s.UpdatedText}</td>
-							<td class="text-right">
-								<div class="flex gap-2 flex-wrap justify-end">
-								if s.URL != "" {
-									<a
-										class="btn btn-sm"
-										href={s.URL}
-										target="_blank"
-									>
-										Open
-									</a>
-								}
-								if s.LogsURL != "" {
-									<a
-										class="btn btn-sm btn-outline"
-										href={s.LogsURL}
-										target="_blank"
-									>
-										Logs
-									</a>
-								}
-								if s.MetricsURL != "" {
-									<a
-										class="btn btn-sm btn-outline"
-										href={s.MetricsURL}
-										target="_blank"
-									>
-										Metrics
-									</a>
-								}
-								<form method="post" action={s.RedeployURL}>
-									<input type="hidden" name="return_to" value="/services" />
-									<button class="btn btn-sm btn-ghost" type="submit">Redeploy</button>
-								</form>
-								<form method="post" action={s.DeleteURL} onsubmit="return confirm('Delete this service?');">
-									<input type="hidden" name="return_to" value="/services" />
-									<button class="btn btn-sm btn-error btn-outline" type="submit">Delete</button>
-								</form>
-								<form method="post" action={s.DisableURL} onsubmit="return confirm('Disable public traffic for this service?');">
-									<input type="hidden" name="return_to" value="/services" />
-									<button class="btn btn-sm btn-warning btn-outline" type="submit">Disable Public</button>
-								</form>
-								<a
-									class="btn btn-sm btn-ghost"
-									href={s.DetailHref}
-								>
-									Details
-								</a>
-								</div>
-							</td>
-						</tr>
-					}
-				</tbody>
-			</table>
-		</div>
+							</tbody>
+						</table>
+					</div>
+				</div>
+			</div>
+		}
 
-		<div class="mt-4 text-xs text-base-content/50">
-			Rendered at { vm.Now.Format("2006-01-02 15:04:05") }
+		<div class="mt-4" style="font-size:0.72rem;color:#8b7fa8;font-family:'SUSE Mono',monospace;">
+			rendered { vm.Now.Format("2006-01-02 15:04:05") }
 		</div>
 	}
 </div>

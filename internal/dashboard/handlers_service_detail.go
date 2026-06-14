@@ -23,12 +23,19 @@ func serviceDetailHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	render := func(vm views.ServiceDetailVM) {
+		lctx := views.LayoutCtx{
+			ProjectID:    vm.Project,
+			Region:       vm.Region,
+			AuthStatus:   vm.AuthStatus,
+			ServiceCount: -1,
+		}
 		views.Layout("Service "+name, "services",
 			[]views.Crumb{
 				{Label: "Overview", Href: "/"},
 				{Label: "Services", Href: "/services"},
 				{Label: name, Href: ""},
 			},
+			lctx,
 			views.ServiceDetail(vm),
 		).
 			Render(r.Context(), w)
@@ -81,6 +88,7 @@ func serviceDetailHandler(w http.ResponseWriter, r *http.Request) {
 	authStatus := "missing"
 	authHint := "Run: advncd login"
 	image := ""
+	memory := ""
 	insights := serviceInsights{}
 	var conditions []views.ConditionVM
 	var handlerErr string
@@ -105,6 +113,7 @@ func serviceDetailHandler(w http.ResponseWriter, r *http.Request) {
 			state.Status = normalizeStatus(svc.Status)
 			state.LastRevision = strings.TrimSpace(svc.LatestRevision)
 			image = svc.Image
+			memory = strings.TrimSpace(svc.Memory)
 			conditions = mapConditions(svc.Conditions)
 			insights = buildServiceInsights(ctx, tb.AccessToken, cfg.ProjectID, cfg.Region, state.Name, svc)
 		}
@@ -141,6 +150,7 @@ func serviceDetailHandler(w http.ResponseWriter, r *http.Request) {
 		PresetIDOptional:   strings.TrimSpace(state.PresetIDOptional),
 		URL:                state.URL,
 		Image:              image,
+		Memory:             memory,
 		Conditions:         conditions,
 
 		ConsoleURL: cloudRunConsoleURL(cfg.ProjectID, cfg.Region, state.Name),
@@ -162,6 +172,7 @@ func serviceDetailHandler(w http.ResponseWriter, r *http.Request) {
 		SafetyChecks:         mapInsightItems(insights.SafetyChecks),
 		SafetyInterpretation: strings.TrimSpace(insights.SafetyInterpretation),
 		TrafficItems:         mapInsightItems(insights.Traffic),
+		ObservabilityCharts:  mapInsightCharts(insights.Charts),
 		CostItems:            mapInsightItems(insights.Cost),
 		Anomalies:            mapInsightBadges(insights.Anomalies),
 
@@ -176,9 +187,11 @@ func mapInsightItems(items []insightItem) []views.InsightItemVM {
 	out := make([]views.InsightItemVM, 0, len(items))
 	for _, it := range items {
 		out = append(out, views.InsightItemVM{
-			Label:  it.Label,
-			Value:  it.Value,
-			Status: it.Status,
+			Label:       it.Label,
+			Value:       it.Value,
+			Status:      it.Status,
+			Desc:        it.Desc,
+			ActionLabel: it.ActionLabel,
 		})
 	}
 	return out
@@ -190,6 +203,23 @@ func mapInsightBadges(items []insightBadge) []views.InsightBadgeVM {
 		out = append(out, views.InsightBadgeVM{
 			Label:    it.Label,
 			Severity: it.Severity,
+		})
+	}
+	return out
+}
+
+func mapInsightCharts(items []insightChart) []views.ChartSeriesVM {
+	out := make([]views.ChartSeriesVM, 0, len(items))
+	for _, it := range items {
+		out = append(out, views.ChartSeriesVM{
+			Title:      it.Title,
+			LinePath:   it.LinePath,
+			AreaPath:   it.AreaPath,
+			Stroke:     it.Stroke,
+			Fill:       it.Fill,
+			RangeLabel: it.RangeLabel,
+			LastLabel:  it.LastLabel,
+			Empty:      it.Empty,
 		})
 	}
 	return out

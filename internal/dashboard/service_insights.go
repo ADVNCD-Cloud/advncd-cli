@@ -19,19 +19,33 @@ type serviceInsights struct {
 	SafetyChecks         []insightItem
 	SafetyInterpretation string
 	Traffic              []insightItem
+	Charts               []insightChart
 	Cost                 []insightItem
 	Anomalies            []insightBadge
 }
 
 type insightItem struct {
-	Label  string
-	Value  string
-	Status string // good | caution | danger | info
+	Label       string
+	Value       string
+	Status      string // good | caution | danger | info
+	Desc        string // short description for display
+	ActionLabel string // if non-empty, renders an action button
 }
 
 type insightBadge struct {
 	Label    string
 	Severity string // info | warn | error
+}
+
+type insightChart struct {
+	Title      string
+	LinePath   string
+	AreaPath   string
+	Stroke     string
+	Fill       string
+	RangeLabel string
+	LastLabel  string
+	Empty      bool
 }
 
 type actualCostResult struct {
@@ -88,6 +102,7 @@ func buildServiceInsights(
 	out := serviceInsights{
 		SafetyProfile: policy.DeploymentProfile,
 		SafetyChecks:  buildSafetyChecks(svc, policy),
+		Charts:        []insightChart{},
 		Cost:          []insightItem{},
 		Traffic:       []insightItem{},
 		Anomalies:     []insightBadge{},
@@ -98,6 +113,40 @@ func buildServiceInsights(
 	oneDay, err24h := gcpmonitoring.FetchServiceTrafficWindow(ctx, accessToken, projectID, serviceName, 24*time.Hour)
 	if err24h != nil {
 		oneDay = nil
+	}
+
+	series, errSeries := gcpmonitoring.FetchServiceObservabilitySeries(ctx, accessToken, projectID, serviceName, time.Hour, 5*time.Minute)
+	if errSeries == nil && series != nil {
+		out.Charts = append(out.Charts,
+			buildInsightChart(
+				"Requests (last 1h)",
+				series.RequestCount,
+				"#00d2ff",
+				"rgba(0,210,255,0.15)",
+				func(v float64) string { return fmt.Sprintf("%.0f req", v) },
+			),
+			buildInsightChart(
+				"Latency p95 (last 1h)",
+				series.LatencyP95Ms,
+				"#7de87d",
+				"rgba(125,232,125,0.15)",
+				func(v float64) string { return fmt.Sprintf("%.0f ms", v) },
+			),
+			buildInsightChart(
+				"Error rate (last 1h)",
+				series.ErrorRatePct,
+				"#ff8a65",
+				"rgba(255,138,101,0.15)",
+				func(v float64) string { return fmt.Sprintf("%.2f%%", v) },
+			),
+		)
+		for _, w := range series.SeriesWarning {
+			out.Traffic = append(out.Traffic, insightItem{
+				Label:  "chart note",
+				Value:  strings.TrimSpace(w),
+				Status: "caution",
+			})
+		}
 	}
 
 	if err1h != nil {
@@ -117,10 +166,14 @@ func buildServiceInsights(
 			Value:  fmt.Sprintf("%.2f rpm", oneHour.RequestsPerMinute),
 			Status: trafficStatus(oneHour.RequestsPerMinute),
 		})
+		p95Status := "info"
+		if oneHour.LatencyP95Ms != nil && *oneHour.LatencyP95Ms > 30000 {
+			p95Status = "caution"
+		}
 		out.Traffic = append(out.Traffic, insightItem{
 			Label:  "latency p95",
 			Value:  formatMs(oneHour.LatencyP95Ms),
-			Status: "info",
+			Status: p95Status,
 		})
 		out.Traffic = append(out.Traffic, insightItem{
 			Label:  "error rate",
@@ -224,135 +277,158 @@ func buildSafetyChecks(svc *gcprun.ServiceDetail, policy safety.Policy) []insigh
 	}
 
 	checks = append(checks, insightItem{
-		Label:  "deployment profile",
+		Label:  "Deployment profile: " + policy.DeploymentProfile,
 		Value:  policy.DeploymentProfile,
+		Desc:   "Standard configuration.",
 		Status: "info",
 	})
 
 	if svc.MinInstances == 0 {
 		checks = append(checks, insightItem{
-			Label:  "min instances",
-			Value:  "0 (scales to zero when idle)",
+			Label:  "Min instances: 0",
+			Value:  "0",
+			Desc:   "Scales to zero when idle — cost efficient.",
 			Status: "good",
 		})
 	} else {
 		checks = append(checks, insightItem{
-			Label:  "min instances",
-			Value:  fmt.Sprintf("%d (keeps always-on capacity and baseline cost)", svc.MinInstances),
-			Status: "caution",
+			Label:       fmt.Sprintf("Min instances: %d", svc.MinInstances),
+			Value:       fmt.Sprintf("%d", svc.MinInstances),
+			Desc:        "Keeps always-on capacity and adds baseline cost.",
+			Status:      "caution",
+			ActionLabel: "Review",
 		})
 	}
 
 	if svc.MaxInstances > 0 && svc.MaxInstances <= 1 {
 		checks = append(checks, insightItem{
-			Label:  "max instances",
-			Value:  fmt.Sprintf("%d (tight cap for low-traffic)", svc.MaxInstances),
+			Label:  fmt.Sprintf("Max instances: %d", svc.MaxInstances),
+			Value:  fmt.Sprintf("%d", svc.MaxInstances),
+			Desc:   "Tight cap — limits spend for low-traffic service.",
 			Status: "good",
 		})
 	} else if svc.MaxInstances > 1 {
 		checks = append(checks, insightItem{
-			Label:  "max instances",
-			Value:  fmt.Sprintf("%d (higher scale can increase spend during bursts)", svc.MaxInstances),
-			Status: "caution",
+			Label:       fmt.Sprintf("Max instances: %d", svc.MaxInstances),
+			Value:       fmt.Sprintf("%d", svc.MaxInstances),
+			Desc:        "DDoS or traffic spike will scale costs fast.",
+			Status:      "caution",
+			ActionLabel: "Edit limit",
 		})
 	} else {
 		checks = append(checks, insightItem{
-			Label:  "max instances",
-			Value:  "not set",
-			Status: "caution",
+			Label:       "Max instances: not set",
+			Value:       "not set",
+			Desc:        "No ceiling — uncapped spending during traffic spikes.",
+			Status:      "caution",
+			ActionLabel: "Set limit",
 		})
 	}
 
 	if svc.TimeoutSeconds > 0 && svc.TimeoutSeconds <= 30 {
 		checks = append(checks, insightItem{
-			Label:  "request timeout",
-			Value:  fmt.Sprintf("%ds (tight for low-cost profile)", svc.TimeoutSeconds),
+			Label:  fmt.Sprintf("Request timeout: %ds", svc.TimeoutSeconds),
+			Value:  fmt.Sprintf("%ds", svc.TimeoutSeconds),
+			Desc:   "Tight timeout for low-cost profile.",
 			Status: "good",
 		})
 	} else if svc.TimeoutSeconds > 0 {
 		checks = append(checks, insightItem{
-			Label:  "request timeout",
-			Value:  fmt.Sprintf("%ds (long timeouts increase risk and cost)", svc.TimeoutSeconds),
-			Status: "caution",
+			Label:       fmt.Sprintf("Request timeout: %ds", svc.TimeoutSeconds),
+			Value:       fmt.Sprintf("%ds", svc.TimeoutSeconds),
+			Desc:        "Long timeouts increase risk and cost on hanging requests.",
+			Status:      "caution",
+			ActionLabel: "Reduce",
 		})
 	} else {
 		checks = append(checks, insightItem{
-			Label:  "request timeout",
-			Value:  "not reported by API",
+			Label:  "Request timeout: not reported",
+			Value:  "not reported",
+			Desc:   "Timeout value not returned by the API.",
 			Status: "caution",
 		})
 	}
 
 	memMi := parseMemoryMi(svc.Memory)
 	if memMi > 0 && memMi <= 512 {
-		checks = append(checks, insightItem{Label: "runtime memory", Value: fmt.Sprintf("%dMi", memMi), Status: "good"})
-	} else if memMi > 0 {
-		checks = append(checks, insightItem{Label: "runtime memory", Value: fmt.Sprintf("%dMi (higher than typical low-traffic baseline)", memMi), Status: "caution"})
-	} else {
-		checks = append(checks, insightItem{Label: "runtime memory", Value: "not reported by API", Status: "caution"})
-	}
-
-	secretRefs := len(svc.SecretEnvKeys)
-	plainSensitive := countPlainSensitiveEnv(svc.Env)
-	if secretRefs > 0 {
 		checks = append(checks, insightItem{
-			Label:  "secret manager references",
-			Value:  fmt.Sprintf("%d detected", secretRefs),
+			Label:  fmt.Sprintf("Runtime memory: %dMi", memMi),
+			Value:  fmt.Sprintf("%dMi", memMi),
+			Desc:   "Within the typical low-traffic baseline.",
 			Status: "good",
 		})
-	} else if policy.DeploymentProfile == safety.ProfileWebhookLowTraffic {
+	} else if memMi > 0 {
 		checks = append(checks, insightItem{
-			Label:  "secret manager references",
-			Value:  "none detected for webhook profile",
+			Label:  fmt.Sprintf("Runtime memory: %dMi", memMi),
+			Value:  fmt.Sprintf("%dMi", memMi),
+			Desc:   "Higher than the typical low-traffic baseline.",
 			Status: "caution",
 		})
 	} else {
 		checks = append(checks, insightItem{
-			Label:  "secret manager references",
-			Value:  "none detected",
-			Status: "info",
+			Label:  "Runtime memory: not reported",
+			Value:  "not reported",
+			Desc:   "Memory value not returned by the API.",
+			Status: "caution",
 		})
 	}
 
-	checks = append(checks, insightItem{
-		Label:  "plain sensitive env",
-		Value:  "none detected",
-		Status: "good",
-	})
-	if plainSensitive > 0 {
-		checks[len(checks)-1] = insightItem{
-			Label:  "plain sensitive env",
-			Value:  fmt.Sprintf("%d key(s) detected in plain env", plainSensitive),
-			Status: "danger",
-		}
-	}
-
+	secretRefs := len(svc.SecretEnvKeys)
+	plainSensitive := countPlainSensitiveEnv(svc.Env)
 	querySecretCount := countQuerySecretEnvValues(svc.Env)
-	if querySecretCount == 0 {
+
+	if plainSensitive > 0 || querySecretCount > 0 {
+		var descParts []string
+		if plainSensitive > 0 {
+			descParts = append(descParts, fmt.Sprintf("%d sensitive env key(s) in plain text — use Secret Manager.", plainSensitive))
+		}
+		if querySecretCount > 0 {
+			descParts = append(descParts, fmt.Sprintf("%d insecure query-string value(s) — secrets should not appear in URLs.", querySecretCount))
+		}
 		checks = append(checks, insightItem{
-			Label:  "query-string secrets",
-			Value:  "none detected",
-			Status: "good",
+			Label:  "Sensitive env / query secrets",
+			Value:  "issues detected",
+			Desc:   strings.Join(descParts, " "),
+			Status: "danger",
 		})
 	} else {
 		checks = append(checks, insightItem{
-			Label:  "query-string secrets",
-			Value:  fmt.Sprintf("%d insecure value(s) detected", querySecretCount),
-			Status: "danger",
+			Label:  "Sensitive env / query secrets",
+			Value:  "none",
+			Desc:   "None detected in env vars and query string.",
+			Status: "good",
+		})
+	}
+
+	if secretRefs > 0 {
+		checks = append(checks, insightItem{
+			Label:  fmt.Sprintf("Secret Manager: %d reference(s)", secretRefs),
+			Value:  fmt.Sprintf("%d", secretRefs),
+			Desc:   "Good — secrets are managed via Secret Manager.",
+			Status: "good",
+		})
+	} else if policy.DeploymentProfile == safety.ProfileWebhookLowTraffic {
+		checks = append(checks, insightItem{
+			Label:  "Secret Manager references",
+			Value:  "none",
+			Desc:   "No Secret Manager references for webhook profile.",
+			Status: "caution",
 		})
 	}
 
 	if policy.DeploymentProfile == safety.ProfileWebhookLowTraffic {
 		if secretRefs == 0 && plainSensitive == 0 {
 			checks = append(checks, insightItem{
-				Label:  "webhook protection signal",
-				Value:  "No auth secret detected. Public webhook exposure risk.",
+				Label:  "Webhook protection",
+				Value:  "no auth secret",
+				Desc:   "No auth secret detected. Public webhook exposure risk.",
 				Status: "danger",
 			})
 		} else {
 			checks = append(checks, insightItem{
-				Label:  "webhook protection signal",
-				Value:  "Auth secret detected for webhook profile.",
+				Label:  "Webhook protection",
+				Value:  "auth detected",
+				Desc:   "Auth secret detected for webhook profile.",
 				Status: "good",
 			})
 		}
@@ -486,6 +562,81 @@ func detectAnomalies(svc *gcprun.ServiceDetail, oneHour, oneDay *gcpmonitoring.S
 	}
 
 	return out
+}
+
+func buildInsightChart(
+	title string,
+	points []gcpmonitoring.MetricPoint,
+	stroke string,
+	fill string,
+	valueFmt func(float64) string,
+) insightChart {
+	chart := insightChart{
+		Title:  title,
+		Stroke: stroke,
+		Fill:   fill,
+		Empty:  true,
+	}
+
+	values := make([]float64, 0, len(points))
+	for _, p := range points {
+		values = append(values, p.Value)
+	}
+	line, area, minV, maxV, lastV, ok := sparklinePath(values, 220.0, 64.0)
+	if !ok {
+		return chart
+	}
+
+	chart.LinePath = line
+	chart.AreaPath = area
+	chart.RangeLabel = valueFmt(minV) + " - " + valueFmt(maxV)
+	chart.LastLabel = valueFmt(lastV)
+	chart.Empty = false
+	return chart
+}
+
+func sparklinePath(values []float64, width, height float64) (linePath, areaPath string, minV, maxV, lastV float64, ok bool) {
+	if len(values) == 0 {
+		return "", "", 0, 0, 0, false
+	}
+
+	minV = values[0]
+	maxV = values[0]
+	for _, v := range values {
+		if v < minV {
+			minV = v
+		}
+		if v > maxV {
+			maxV = v
+		}
+	}
+	lastV = values[len(values)-1]
+
+	if len(values) == 1 {
+		y := height / 2.0
+		line := fmt.Sprintf("M 0 %.2f L %.2f %.2f", y, width, y)
+		area := line + fmt.Sprintf(" L %.2f %.2f L 0 %.2f Z", width, height, height)
+		return line, area, minV, maxV, lastV, true
+	}
+
+	var b strings.Builder
+	for i, v := range values {
+		x := (float64(i) / float64(len(values)-1)) * width
+		y := height / 2.0
+		if maxV > minV {
+			n := (v - minV) / (maxV - minV)
+			y = height - (n * height)
+		}
+		if i == 0 {
+			fmt.Fprintf(&b, "M %.2f %.2f", x, y)
+		} else {
+			fmt.Fprintf(&b, " L %.2f %.2f", x, y)
+		}
+	}
+
+	line := b.String()
+	area := line + fmt.Sprintf(" L %.2f %.2f L 0 %.2f Z", width, height, height)
+	return line, area, minV, maxV, lastV, true
 }
 
 func svcMemory(svc *gcprun.ServiceDetail) string {

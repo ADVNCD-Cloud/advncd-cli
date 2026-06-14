@@ -35,6 +35,7 @@ func serviceExplainHandler(w http.ResponseWriter, r *http.Request) {
 				{Label: "Services", Href: "/services"},
 				{Label: name, Href: ""},
 			},
+			views.LayoutCtx{ServiceCount: -1},
 			views.ServiceDetail(vm),
 		).Render(r.Context(), w)
 	}

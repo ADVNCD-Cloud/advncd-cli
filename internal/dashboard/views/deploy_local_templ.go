@@ -47,7 +47,7 @@ func DeployLocal(vm DeployLocalVM) templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"max-w-4xl\"><h1 class=\"text-2xl font-semibold\">Deploy Local Project</h1><p class=\"text-base-content/70 mt-1\">Bridge local code deployment through the dashboard flow.</p>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"max-w-4xl\"><div class=\"flex items-start justify-between gap-4\"><div><h1 class=\"text-2xl font-semibold\" style=\"color:#ffffff;\">Deploy Local Project</h1><p class=\"mt-1 text-sm\" style=\"color:#8b7fa8;\">Detected profile for your local project.</p></div><a class=\"btn btn-sm btn-ghost\" href=\"/\">← Overview</a></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -59,7 +59,7 @@ func DeployLocal(vm DeployLocalVM) templ.Component {
 			var templ_7745c5c3_Var2 string
 			templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.JoinStringErrs(vm.Error)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/deploy_local.templ`, Line: 28, Col: 18}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/deploy_local.templ`, Line: 33, Col: 18}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var2))
 			if templ_7745c5c3_Err != nil {
@@ -70,170 +70,190 @@ func DeployLocal(vm DeployLocalVM) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<div class=\"card bg-base-100 shadow mt-6\"><div class=\"card-body\"><h2 class=\"card-title\">Detected Profile</h2><div class=\"grid grid-cols-1 md:grid-cols-2 gap-4 mt-2\"><div><div class=\"text-sm text-base-content/60\">selected_path</div><div class=\"font-mono break-all\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<div class=\"card mt-6\"><div class=\"card-body\" style=\"padding:1.25rem;\"><h2 class=\"card-title\">Detected Profile</h2><div class=\"grid grid-cols-1 md:grid-cols-2 gap-4 mt-4\"><div><div style=\"color:#8b7fa8;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.06em;font-family:'SUSE Mono',monospace;\">path</div><div class=\"font-mono break-all mt-1\" style=\"font-size:0.8rem;color:#b0f0ff;\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var3 string
 		templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(vm.Path)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/deploy_local.templ`, Line: 38, Col: 46}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/deploy_local.templ`, Line: 44, Col: 91}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</div></div><div><div class=\"text-sm text-base-content/60\">service</div><div class=\"font-mono\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</div></div><div><div style=\"color:#8b7fa8;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.06em;font-family:'SUSE Mono',monospace;\">service</div><div class=\"font-mono mt-1\" style=\"font-size:0.85rem;color:#00d2ff;\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var4 string
 		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(vm.Service)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/deploy_local.templ`, Line: 42, Col: 39}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/deploy_local.templ`, Line: 48, Col: 85}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "</div></div><div><div class=\"text-sm text-base-content/60\">runtime</div><div class=\"font-mono\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "</div></div><div><div style=\"color:#8b7fa8;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.06em;font-family:'SUSE Mono',monospace;\">runtime</div><div class=\"font-mono mt-1\" style=\"font-size:0.85rem;\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var5 string
 		templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(vm.Runtime)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/deploy_local.templ`, Line: 46, Col: 39}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/deploy_local.templ`, Line: 52, Col: 71}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "</div></div><div><div class=\"text-sm text-base-content/60\">build_strategy</div><div class=\"font-mono\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "</div></div><div><div style=\"color:#8b7fa8;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.06em;font-family:'SUSE Mono',monospace;\">build_strategy</div><div class=\"font-mono mt-1\" style=\"font-size:0.85rem;\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var6 string
 		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(vm.Build)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/deploy_local.templ`, Line: 50, Col: 37}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/deploy_local.templ`, Line: 56, Col: 69}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "</div></div><div><div class=\"text-sm text-base-content/60\">port</div><div class=\"font-mono\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "</div></div><div><div style=\"color:#8b7fa8;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.06em;font-family:'SUSE Mono',monospace;\">port</div><div class=\"font-mono mt-1\" style=\"font-size:0.85rem;\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var7 string
 		templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(itoa(vm.Port))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/deploy_local.templ`, Line: 54, Col: 42}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/deploy_local.templ`, Line: 60, Col: 74}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "</div></div><div><div class=\"text-sm text-base-content/60\">confidence</div><div class=\"font-mono\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "</div></div><div><div style=\"color:#8b7fa8;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.06em;font-family:'SUSE Mono',monospace;\">confidence</div><div class=\"mt-1\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if vm.Confidence == "high" {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "<span class=\"badge badge-success\">high</span>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		} else if vm.Confidence == "medium" {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<span class=\"badge badge-warning\">medium</span>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		} else {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "<span class=\"badge badge-error\">low</span>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "</div></div><div><div style=\"color:#8b7fa8;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.06em;font-family:'SUSE Mono',monospace;\">target_project</div><div class=\"font-mono mt-1\" style=\"font-size:0.85rem;color:#b0f0ff;\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var8 string
-		templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(vm.Confidence)
+		templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(vm.Project)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/deploy_local.templ`, Line: 58, Col: 42}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/deploy_local.templ`, Line: 76, Col: 85}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "</div></div><div><div class=\"text-sm text-base-content/60\">target_project</div><div class=\"font-mono\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "</div></div><div><div style=\"color:#8b7fa8;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.06em;font-family:'SUSE Mono',monospace;\">target_region</div><div class=\"font-mono mt-1\" style=\"font-size:0.85rem;color:#b0f0ff;\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var9 string
-		templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(vm.Project)
+		templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(vm.Region)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/deploy_local.templ`, Line: 62, Col: 39}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/deploy_local.templ`, Line: 80, Col: 84}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "</div></div><div><div class=\"text-sm text-base-content/60\">target_region</div><div class=\"font-mono\">")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var10 string
-		templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(vm.Region)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/deploy_local.templ`, Line: 66, Col: 38}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "</div></div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "</div></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if len(vm.Warnings) > 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "<div class=\"mt-4\"><div class=\"text-sm text-base-content/60 mb-2\">warnings</div><ul class=\"list-disc ml-6 text-sm\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "<div class=\"mt-5\" style=\"padding:0.75rem 1rem;background:rgba(255,204,0,0.06);border:1px solid rgba(255,204,0,0.2);border-radius:8px;\"><div style=\"color:#ffcc00;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.08em;font-family:'SUSE Mono',monospace;margin-bottom:0.4rem;\">Warnings</div><ul style=\"margin:0;padding-left:1.25rem;\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			for _, w := range vm.Warnings {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "<li>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "<li style=\"font-size:0.82rem;color:#8b7fa8;margin-bottom:0.2rem;\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var11 string
-				templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(w)
+				var templ_7745c5c3_Var10 string
+				templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(w)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/deploy_local.templ`, Line: 75, Col: 13}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/deploy_local.templ`, Line: 89, Col: 75}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "</li>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "</li>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "</ul></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "</ul></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "<div class=\"mt-5 flex gap-2 flex-wrap\"><button class=\"btn btn-sm btn-outline\" id=\"copy-deploy-local\" type=\"button\" data-cmd=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "<div class=\"mt-5 flex gap-2 flex-wrap\"><button class=\"btn btn-sm btn-outline font-mono\" id=\"copy-deploy-local\" type=\"button\" data-cmd=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var11 string
+		templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs("advncd deploy --path " + vm.Path)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/deploy_local.templ`, Line: 100, Col: 48}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "\">Copy: advncd deploy --path ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var12 string
-		templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs("advncd deploy --path " + vm.Path)
+		templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(vm.Path)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/deploy_local.templ`, Line: 82, Col: 123}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/deploy_local.templ`, Line: 102, Col: 40}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "\">Copy deploy command</button> <a class=\"btn btn-sm btn-ghost\" href=\"/\">Back to overview</a></div></div></div><div class=\"mt-4 text-xs text-base-content/50\">Rendered at ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "</button> <a class=\"btn btn-sm btn-ghost\" href=\"/\">Back to overview</a></div></div></div><div class=\"mt-4\" style=\"font-size:0.72rem;color:#8b7fa8;font-family:'SUSE Mono',monospace;\">rendered ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var13 string
 		templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(vm.Now.Format("2006-01-02 15:04:05"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/deploy_local.templ`, Line: 91, Col: 51}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/deploy_local.templ`, Line: 110, Col: 48}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "</div><script>\ndocument.addEventListener(\"click\", async (e) => {\n  const btn = e.target.closest(\"#copy-deploy-local\");\n  if (!btn) return;\n  const cmd = btn.getAttribute(\"data-cmd\") || \"advncd deploy\";\n  try {\n    await navigator.clipboard.writeText(cmd);\n    const prev = btn.textContent;\n    btn.textContent = \"Copied ✓\";\n    setTimeout(() => { btn.textContent = prev; }, 1500);\n  } catch (_) {}\n});\n\t</script></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "</div><script>\ndocument.addEventListener(\"click\", async (e) => {\n  const btn = e.target.closest(\"#copy-deploy-local\");\n  if (!btn) return;\n  const cmd = btn.getAttribute(\"data-cmd\") || \"advncd deploy\";\n  try {\n    await navigator.clipboard.writeText(cmd);\n    const prev = btn.textContent; btn.textContent = \"Copied ✓\";\n    setTimeout(() => { btn.textContent = prev; }, 1500);\n  } catch (_) {}\n});\n\t</script></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

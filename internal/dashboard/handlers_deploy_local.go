@@ -18,6 +18,7 @@ func deployLocalHandler(w http.ResponseWriter, r *http.Request) {
 				{Label: "Overview", Href: "/"},
 				{Label: "Deploy Local Project", Href: ""},
 			},
+			views.LayoutCtx{ProjectID: vm.Project, Region: vm.Region, ServiceCount: -1},
 			views.DeployLocal(vm),
 		).Render(r.Context(), w)
 	}

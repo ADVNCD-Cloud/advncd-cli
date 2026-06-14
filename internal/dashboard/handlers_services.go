@@ -15,11 +15,17 @@ import (
 
 func servicesListHandler(w http.ResponseWriter, r *http.Request) {
 	render := func(vm views.ServicesListVM) {
+		lctx := views.LayoutCtx{
+			ProjectID:    vm.Project,
+			Region:       vm.Region,
+			ServiceCount: len(vm.Services),
+		}
 		views.Layout("Services", "services",
 			[]views.Crumb{
 				{Label: "Overview", Href: "/"},
 				{Label: "Services", Href: ""},
 			},
+			lctx,
 			views.ServicesList(vm),
 		).
 			Render(r.Context(), w)

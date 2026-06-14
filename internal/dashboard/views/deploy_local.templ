@@ -20,8 +20,13 @@ type DeployLocalVM struct {
 
 templ DeployLocal(vm DeployLocalVM) {
 <div class="max-w-4xl">
-	<h1 class="text-2xl font-semibold">Deploy Local Project</h1>
-	<p class="text-base-content/70 mt-1">Bridge local code deployment through the dashboard flow.</p>
+	<div class="flex items-start justify-between gap-4">
+		<div>
+			<h1 class="text-2xl font-semibold" style="color:#ffffff;">Deploy Local Project</h1>
+			<p class="mt-1 text-sm" style="color:#8b7fa8;">Detected profile for your local project.</p>
+		</div>
+		<a class="btn btn-sm btn-ghost" href="/">← Overview</a>
+	</div>
 
 	if vm.Error != "" {
 		<div class="alert alert-error mt-6">
@@ -29,66 +34,80 @@ templ DeployLocal(vm DeployLocalVM) {
 		</div>
 	}
 
-	<div class="card bg-base-100 shadow mt-6">
-		<div class="card-body">
+	<div class="card mt-6">
+		<div class="card-body" style="padding:1.25rem;">
 			<h2 class="card-title">Detected Profile</h2>
-			<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+
+			<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
 				<div>
-					<div class="text-sm text-base-content/60">selected_path</div>
-					<div class="font-mono break-all">{vm.Path}</div>
+					<div style="color:#8b7fa8;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.06em;font-family:'SUSE Mono',monospace;">path</div>
+					<div class="font-mono break-all mt-1" style="font-size:0.8rem;color:#b0f0ff;">{vm.Path}</div>
 				</div>
 				<div>
-					<div class="text-sm text-base-content/60">service</div>
-					<div class="font-mono">{vm.Service}</div>
+					<div style="color:#8b7fa8;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.06em;font-family:'SUSE Mono',monospace;">service</div>
+					<div class="font-mono mt-1" style="font-size:0.85rem;color:#00d2ff;">{vm.Service}</div>
 				</div>
 				<div>
-					<div class="text-sm text-base-content/60">runtime</div>
-					<div class="font-mono">{vm.Runtime}</div>
+					<div style="color:#8b7fa8;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.06em;font-family:'SUSE Mono',monospace;">runtime</div>
+					<div class="font-mono mt-1" style="font-size:0.85rem;">{vm.Runtime}</div>
 				</div>
 				<div>
-					<div class="text-sm text-base-content/60">build_strategy</div>
-					<div class="font-mono">{vm.Build}</div>
+					<div style="color:#8b7fa8;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.06em;font-family:'SUSE Mono',monospace;">build_strategy</div>
+					<div class="font-mono mt-1" style="font-size:0.85rem;">{vm.Build}</div>
 				</div>
 				<div>
-					<div class="text-sm text-base-content/60">port</div>
-					<div class="font-mono">{itoa(vm.Port)}</div>
+					<div style="color:#8b7fa8;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.06em;font-family:'SUSE Mono',monospace;">port</div>
+					<div class="font-mono mt-1" style="font-size:0.85rem;">{itoa(vm.Port)}</div>
 				</div>
 				<div>
-					<div class="text-sm text-base-content/60">confidence</div>
-					<div class="font-mono">{vm.Confidence}</div>
+					<div style="color:#8b7fa8;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.06em;font-family:'SUSE Mono',monospace;">confidence</div>
+					<div class="mt-1">
+						if vm.Confidence == "high" {
+							<span class="badge badge-success">high</span>
+						} else if vm.Confidence == "medium" {
+							<span class="badge badge-warning">medium</span>
+						} else {
+							<span class="badge badge-error">low</span>
+						}
+					</div>
 				</div>
 				<div>
-					<div class="text-sm text-base-content/60">target_project</div>
-					<div class="font-mono">{vm.Project}</div>
+					<div style="color:#8b7fa8;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.06em;font-family:'SUSE Mono',monospace;">target_project</div>
+					<div class="font-mono mt-1" style="font-size:0.85rem;color:#b0f0ff;">{vm.Project}</div>
 				</div>
 				<div>
-					<div class="text-sm text-base-content/60">target_region</div>
-					<div class="font-mono">{vm.Region}</div>
+					<div style="color:#8b7fa8;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.06em;font-family:'SUSE Mono',monospace;">target_region</div>
+					<div class="font-mono mt-1" style="font-size:0.85rem;color:#b0f0ff;">{vm.Region}</div>
 				</div>
 			</div>
 
 			if len(vm.Warnings) > 0 {
-				<div class="mt-4">
-					<div class="text-sm text-base-content/60 mb-2">warnings</div>
-					<ul class="list-disc ml-6 text-sm">
+				<div class="mt-5" style="padding:0.75rem 1rem;background:rgba(255,204,0,0.06);border:1px solid rgba(255,204,0,0.2);border-radius:8px;">
+					<div style="color:#ffcc00;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.08em;font-family:'SUSE Mono',monospace;margin-bottom:0.4rem;">Warnings</div>
+					<ul style="margin:0;padding-left:1.25rem;">
 						for _, w := range vm.Warnings {
-							<li>{w}</li>
+							<li style="font-size:0.82rem;color:#8b7fa8;margin-bottom:0.2rem;">{w}</li>
 						}
 					</ul>
 				</div>
 			}
 
 			<div class="mt-5 flex gap-2 flex-wrap">
-				<button class="btn btn-sm btn-outline" id="copy-deploy-local" type="button" data-cmd={"advncd deploy --path " + vm.Path}>
-					Copy deploy command
+				<button
+					class="btn btn-sm btn-outline font-mono"
+					id="copy-deploy-local"
+					type="button"
+					data-cmd={"advncd deploy --path " + vm.Path}
+				>
+					Copy: advncd deploy --path {vm.Path}
 				</button>
 				<a class="btn btn-sm btn-ghost" href="/">Back to overview</a>
 			</div>
 		</div>
 	</div>
 
-	<div class="mt-4 text-xs text-base-content/50">
-		Rendered at {vm.Now.Format("2006-01-02 15:04:05")}
+	<div class="mt-4" style="font-size:0.72rem;color:#8b7fa8;font-family:'SUSE Mono',monospace;">
+		rendered {vm.Now.Format("2006-01-02 15:04:05")}
 	</div>
 
 	<script>
@@ -98,8 +117,7 @@ document.addEventListener("click", async (e) => {
   const cmd = btn.getAttribute("data-cmd") || "advncd deploy";
   try {
     await navigator.clipboard.writeText(cmd);
-    const prev = btn.textContent;
-    btn.textContent = "Copied ✓";
+    const prev = btn.textContent; btn.textContent = "Copied ✓";
     setTimeout(() => { btn.textContent = prev; }, 1500);
   } catch (_) {}
 });

@@ -16,10 +16,19 @@ import (
 
 func overviewHandler(w http.ResponseWriter, r *http.Request) {
 	render := func(vm views.HomeVM) {
+		lctx := views.LayoutCtx{
+			ProjectID:      vm.ProjectID,
+			Region:         vm.Region,
+			Email:          vm.Email,
+			TokenExpiresIn: vm.TokenExpiresIn,
+			AuthStatus:     vm.AuthStatus,
+			ServiceCount:   vm.ServicesTotal,
+		}
 		views.Layout("Overview", "overview",
 			[]views.Crumb{
 				{Label: "Overview", Href: ""},
 			},
+			lctx,
 			views.Home(vm),
 		).Render(r.Context(), w)
 	}

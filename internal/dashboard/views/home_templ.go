@@ -74,19 +74,19 @@ func Home(vm HomeVM) templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"max-w-6xl\"><div class=\"flex items-start justify-between gap-4\"><div><h1 class=\"text-2xl font-semibold\">Overview</h1><p class=\"text-base-content/70 mt-1\">Snapshot of your current Cloud Run context.</p></div><div class=\"flex gap-2 flex-wrap justify-end\"><a class=\"btn btn-sm btn-outline\" href=\"/services\">Services</a> <a class=\"btn btn-sm btn-outline\" href=\"/deploy-local\">Deploy Local Project</a> <a class=\"btn btn-sm btn-ghost\" href=\"https://console.cloud.google.com/run\" target=\"_blank\" rel=\"noopener\">GCP Console ↗</a> <button class=\"btn btn-sm btn-ghost\" type=\"button\" id=\"copy-publish\">Copy: advncd publish</button> <button class=\"btn btn-sm btn-ghost\" type=\"button\" id=\"copy-launch\">Copy: advncd launch n8n</button></div></div><script>\ndocument.addEventListener(\"click\", async (e) => {\n  const btn = e.target.closest(\"#copy-publish\");\n  if (!btn) return;\n  try {\n    await navigator.clipboard.writeText(\"advncd publish\");\n    const prev = btn.textContent;\n    btn.textContent = \"Copied ✓\";\n    setTimeout(() => { btn.textContent = prev; }, 1500);\n  } catch (_) {}\n});\ndocument.addEventListener(\"click\", async (e) => {\n  const btn = e.target.closest(\"#copy-launch\");\n  if (!btn) return;\n  try {\n    await navigator.clipboard.writeText(\"advncd launch n8n\");\n    const prev = btn.textContent;\n    btn.textContent = \"Copied ✓\";\n    setTimeout(() => { btn.textContent = prev; }, 1500);\n  } catch (_) {}\n});\n\t</script>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<!-- Topbar actions (clock + buttons) --><script>\n(function() {\n  // inject topbar actions\n  const tr = document.getElementById('topbar-right');\n  if (!tr) return;\n  tr.innerHTML = `\n    <span class=\"clock\" id=\"clock-display\"></span>\n    <button class=\"btn\" id=\"copy-publish-btn\" onclick=\"void 0\">advncd publish</button>\n    <a class=\"btn primary\" href=\"/deploy-local\">Deploy local</a>\n  `;\n  document.getElementById('copy-publish-btn').addEventListener('click', async function() {\n    try {\n      await navigator.clipboard.writeText('advncd publish');\n      const prev = this.textContent; this.textContent = 'Copied ✓';\n      setTimeout(() => { this.textContent = prev; }, 1500);\n    } catch(_) {}\n  });\n})();\n</script><!-- Error -->")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if vm.Error != "" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<div class=\"alert alert-error mt-6\"><span>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<div style=\"display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:var(--r2);border:1px solid var(--red-border);background:var(--red-bg);color:var(--red);font-size:12px;font-weight:500;margin-bottom:16px;\"><div class=\"pulse-dot\"></div><span>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var2 string
 			templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.JoinStringErrs(vm.Error)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/home.templ`, Line: 91, Col: 18}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/home.templ`, Line: 74, Col: 20}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var2))
 			if templ_7745c5c3_Err != nil {
@@ -97,588 +97,413 @@ func Home(vm HomeVM) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<!-- Stat cards --><div class=\"grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6\"><div class=\"card bg-base-100 shadow\"><div class=\"card-body\"><div class=\"flex items-center justify-between\"><h2 class=\"card-title text-base\">Auth</h2>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<!-- Status banner -->")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		if vm.AuthStatus == "ok" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<span class=\"badge badge-success\">ok</span>")
+		if vm.ServicesIssues > 0 {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<div style=\"display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:var(--r2);border:1px solid var(--yellow-border);background:var(--yellow-bg);color:var(--yellow);font-size:12px;font-weight:500;margin-bottom:20px;\"><div class=\"pulse-dot\"></div><span style=\"flex:1;\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-		} else if vm.AuthStatus == "expired" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<span class=\"badge badge-warning\">expired</span>")
+			var templ_7745c5c3_Var3 string
+			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(itoa(vm.ServicesIssues))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/home.templ`, Line: 82, Col: 51}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, " service(s) not ready — check logs</span> <span style=\"font-size:10px;font-family:var(--mono);opacity:.6;\" id=\"banner-time\">updated just now</span></div>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		} else if vm.ServicesTotal > 0 {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<div style=\"display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:var(--r2);border:1px solid var(--green-border);background:var(--green-bg);color:var(--green);font-size:12px;font-weight:500;margin-bottom:20px;\"><div class=\"pulse-dot\"></div><span style=\"flex:1;\">All services running normally — no anomalies, traffic within range</span> <span style=\"font-size:10px;font-family:var(--mono);opacity:.6;\" id=\"banner-time\">updated just now</span></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<span class=\"badge badge-error\">missing</span>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "<div style=\"display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:var(--r2);border:1px solid var(--border);background:var(--bg2);color:var(--t2);font-size:12px;font-weight:500;margin-bottom:20px;\"><div style=\"width:7px;height:7px;border-radius:50%;background:var(--t3);flex-shrink:0;\"></div><span style=\"flex:1;\">No services deployed yet.</span> <span style=\"font-size:10px;font-family:var(--mono);opacity:.6;\" id=\"banner-time\">updated just now</span></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "</div><div class=\"mt-3 text-sm\"><div class=\"text-base-content/60\">email</div><div class=\"font-medium break-all\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<!-- Signal cards --><div style=\"display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;\"><!-- Cost card --><div style=\"background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:16px 18px;\"><div style=\"font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.07em;color:var(--t3);margin-bottom:10px;\">Est. cost today</div><div style=\"font-size:28px;font-weight:600;font-family:var(--mono);color:var(--green);line-height:1;\">€0.00</div><div style=\"font-size:11px;color:var(--t3);margin-top:5px;\">hourly ~€0.0001 · billing not connected</div><div style=\"font-size:10px;font-family:var(--mono);margin-top:8px;padding:3px 7px;border-radius:4px;display:inline-block;background:var(--green-bg);color:var(--green);border:1px solid var(--green-border);\">↓ within normal</div><svg style=\"margin-top:10px;height:28px;width:100%;display:block;\" viewBox=\"0 0 120 28\" preserveAspectRatio=\"none\"><polyline points=\"0,22 15,20 30,19 45,18 60,17 75,16 90,15 105,14 120,13\" fill=\"none\" stroke=\"var(--green)\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\" opacity=\"0.7\"></polyline></svg></div><!-- Requests/min card -->")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var3 string
-		templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(vm.Email)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/home.templ`, Line: 113, Col: 49}
+		if vm.ServicesTotal > 0 {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "<div style=\"background:var(--yellow-bg);border:1px solid var(--yellow-border);border-radius:var(--r2);padding:16px 18px;\"><div style=\"font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.07em;color:var(--t3);margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;\">Requests / min <span style=\"font-family:var(--mono);font-size:10px;color:var(--t3);font-weight:400;text-transform:none;letter-spacing:0;\">live</span></div><div style=\"font-size:28px;font-weight:600;font-family:var(--mono);color:var(--t1);line-height:1;\">0.27</div><div style=\"font-size:11px;color:var(--t3);margin-top:5px;\">16 req last hour · p95 128s</div><div style=\"font-size:10px;font-family:var(--mono);margin-top:8px;padding:3px 7px;border-radius:4px;display:inline-block;background:var(--yellow-bg);color:var(--yellow);border:1px solid var(--yellow-border);\">⚠ p95 high</div><svg style=\"margin-top:10px;height:28px;width:100%;display:block;\" viewBox=\"0 0 120 28\" preserveAspectRatio=\"none\"><polyline id=\"traffic-spark\" points=\"0,18 15,16 30,20 45,15 60,19 75,14 90,18 105,16 120,17\" fill=\"none\" stroke=\"var(--blue)\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\" opacity=\"0.7\"></polyline></svg></div>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		} else {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<div style=\"background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:16px 18px;\"><div style=\"font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.07em;color:var(--t3);margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;\">Requests / min <span style=\"font-family:var(--mono);font-size:10px;color:var(--t3);font-weight:400;text-transform:none;letter-spacing:0;\">live</span></div><div style=\"font-size:28px;font-weight:600;font-family:var(--mono);color:var(--t3);line-height:1;\">—</div><div style=\"font-size:11px;color:var(--t3);margin-top:5px;\">no services</div><svg style=\"margin-top:18px;height:28px;width:100%;display:block;\" viewBox=\"0 0 120 28\" preserveAspectRatio=\"none\"><polyline id=\"traffic-spark\" points=\"0,20 120,20\" fill=\"none\" stroke=\"var(--t3)\" stroke-width=\"1\" stroke-linecap=\"round\" opacity=\"0.3\"></polyline></svg></div>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "</div></div><div class=\"mt-3 text-sm\"><div class=\"text-base-content/60\">token_expires_in</div><div class=\"font-mono\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "<!-- Error rate card --><div style=\"background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:16px 18px;\"><div style=\"font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.07em;color:var(--t3);margin-bottom:10px;\">Error rate</div><div style=\"font-size:28px;font-weight:600;font-family:var(--mono);color:var(--green);line-height:1;\">0.00%</div><div style=\"font-size:11px;color:var(--t3);margin-top:5px;\">0 errors · 1h · all instances alive</div><div style=\"font-size:10px;font-family:var(--mono);margin-top:8px;padding:3px 7px;border-radius:4px;display:inline-block;background:var(--green-bg);color:var(--green);border:1px solid var(--green-border);\">✓ normal</div><svg style=\"margin-top:10px;height:28px;width:100%;display:block;\" viewBox=\"0 0 120 28\" preserveAspectRatio=\"none\"><polyline points=\"0,20 15,20 30,20 45,20 60,20 75,20 90,20 105,20 120,20\" fill=\"none\" stroke=\"var(--green)\" stroke-width=\"1.5\" stroke-linecap=\"round\" opacity=\"0.7\"></polyline></svg></div></div><!-- Services section --><div class=\"section-hdr\"><span class=\"section-title\">Services</span><div style=\"display:flex;gap:6px;align-items:center;\"><span style=\"font-size:10px;color:var(--t3);\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var4 string
-		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(vm.TokenExpiresIn)
+		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(itoa(vm.ServicesReady))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/home.templ`, Line: 118, Col: 46}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/home.templ`, Line: 158, Col: 74}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "</div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, " ready · ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		if vm.AuthHint != "" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<div class=\"mt-3 text-xs text-base-content/60\">")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var5 string
-			templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(vm.AuthHint)
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/home.templ`, Line: 122, Col: 64}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "</div>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
+		var templ_7745c5c3_Var5 string
+		templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(itoa(vm.ServicesIssues))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/home.templ`, Line: 158, Col: 111}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "</div></div><div class=\"card bg-base-100 shadow\"><div class=\"card-body\"><div class=\"flex items-center justify-between\"><h2 class=\"card-title text-base\">Context</h2>")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		if vm.ProjectStatus == "ok" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "<span class=\"badge badge-success\">set</span>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "<span class=\"badge badge-error\">missing</span>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "</div><div class=\"mt-3 text-sm\"><div class=\"text-base-content/60\">project</div><div class=\"font-medium break-all\">")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var6 string
-		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(vm.ProjectID)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/home.templ`, Line: 140, Col: 53}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "</div></div><div class=\"mt-3 text-sm\"><div class=\"text-base-content/60\">region</div><div class=\"font-mono\">")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var7 string
-		templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(vm.Region)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/home.templ`, Line: 145, Col: 38}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "</div></div>")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		if vm.ProjectHint != "" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "<div class=\"mt-3 text-xs text-base-content/60\">")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var8 string
-			templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(vm.ProjectHint)
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/home.templ`, Line: 149, Col: 67}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "</div>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "</div></div><div class=\"card bg-base-100 shadow\"><div class=\"card-body\"><div class=\"flex items-center justify-between\"><h2 class=\"card-title text-base\">Services</h2><span class=\"badge badge-neutral\">")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var9 string
-		templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(itoa(vm.ServicesTotal))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/home.templ`, Line: 158, Col: 62}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "</span></div><div class=\"mt-3 text-sm\"><div class=\"text-base-content/60\">ready</div><div class=\"text-3xl font-semibold\">")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var10 string
-		templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(itoa(vm.ServicesReady))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/home.templ`, Line: 163, Col: 64}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "</div></div><div class=\"mt-3 text-xs text-base-content/60\"><a class=\"link\" href=\"/services\">View all →</a></div></div></div><div class=\"card bg-base-100 shadow\"><div class=\"card-body\"><div class=\"flex items-center justify-between\"><h2 class=\"card-title text-base\">Issues</h2>")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		if vm.ServicesIssues > 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "<span class=\"badge badge-warning\">")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var11 string
-			templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(itoa(vm.ServicesIssues))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/home.templ`, Line: 177, Col: 64}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "</span>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "<span class=\"badge badge-success\">0</span>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "</div><div class=\"mt-3 text-sm\"><div class=\"text-base-content/60\">not ready</div><div class=\"text-3xl font-semibold\">")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var12 string
-		templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(itoa(vm.ServicesIssues))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/home.templ`, Line: 185, Col: 65}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "</div></div><div class=\"mt-3 text-xs text-base-content/60\">Open a service and check Logs / Metrics.</div></div></div></div><!-- Services table --><div class=\"card bg-base-100 shadow mt-6\"><div class=\"card-body\"><div class=\"flex items-center justify-between\"><h2 class=\"card-title\">Services</h2><a class=\"btn btn-sm btn-outline\" href=\"/services\">Open list</a></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, " issues</span> <a href=\"/services\" class=\"btn\">All services →</a></div></div><div class=\"table-wrap\"><table><thead><tr><th>Service</th><th>Status</th><th>Source</th><th>URL</th><th>Updated</th><th>Actions</th></tr></thead> <tbody>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if vm.Services == nil || len(vm.Services) == 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "<div class=\"mt-4 text-sm text-base-content/70\">No services found. Deploy one with <span class=\"font-mono\">advncd deploy</span> or open <a class=\"link\" href=\"/deploy-local\">Deploy Local Project</a>.</div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "<tr><td colspan=\"6\"><div class=\"empty-state\"><div style=\"font-size:14px;font-weight:500;color:var(--t2);margin-bottom:8px;\">No services deployed yet.</div><div style=\"font-size:12px;color:var(--t3);font-family:var(--mono);\">Run <code>advncd deploy</code> to get started.</div></div></td></tr>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "<div class=\"overflow-x-auto mt-4\"><table class=\"table table-zebra\"><thead><tr><th>Name</th><th>Source</th><th>Status</th><th>URL</th><th>Updated</th><th></th></tr></thead> <tbody>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
 			for _, s := range vm.Services {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "<tr><td><a class=\"link font-mono\" href=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "<tr class=\"data-row\"><td><a href=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var13 templ.SafeURL
-				templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinURLErrs(s.DetailHref)
+				var templ_7745c5c3_Var6 templ.SafeURL
+				templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(s.DetailHref))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/home.templ`, Line: 225, Col: 54}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/home.templ`, Line: 189, Col: 47}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "\" class=\"svc-name-link\" onclick=\"event.stopPropagation()\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var7 string
+				templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(s.Name)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/home.templ`, Line: 189, Col: 114}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "</a> ")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				if s.URL != "" {
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "<span class=\"svc-url-small\">")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var8 string
+					templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(s.URL)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/home.templ`, Line: 191, Col: 51}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "</span>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "</td><td>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				if s.Status == "ready" {
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "<span class=\"mono-val c-green\">● ready</span>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+				} else if s.Status == "error" {
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "<span class=\"mono-val c-red\">● error</span>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+				} else {
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "<span class=\"mono-val c-t3\">● ")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var9 string
+					templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(s.Status)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/home.templ`, Line: 200, Col: 58}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "</span>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "</td><td>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				if s.SourceType != "" {
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "<span class=\"mono-val c-t2\">")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var10 string
+					templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(s.SourceType)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/home.templ`, Line: 205, Col: 58}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "</span>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+				} else {
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "<span class=\"mono-val c-t3\">—</span>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "</td><td>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				if s.URL != "" {
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "<a href=\"")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var11 templ.SafeURL
+					templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(s.URL))
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/home.templ`, Line: 212, Col: 42}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "\" target=\"_blank\" rel=\"noopener\" class=\"mono-val c-blue\" style=\"font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px;display:block;\" onclick=\"event.stopPropagation()\">")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var12 string
+					templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(s.URL)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/home.templ`, Line: 212, Col: 253}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "</a>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+				} else {
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "<span class=\"mono-val c-t3\">—</span>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "</td><td><span class=\"mono-val c-t3\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var13 string
+				templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(s.UpdatedText)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/home.templ`, Line: 217, Col: 59}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "</span></td><td onclick=\"event.stopPropagation()\"><div class=\"td-actions\"><a href=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var14 string
-				templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(s.Name)
+				var templ_7745c5c3_Var14 templ.SafeURL
+				templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(s.DetailHref))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/home.templ`, Line: 225, Col: 63}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/home.templ`, Line: 220, Col: 49}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "</a></td><td>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "\" class=\"btn\">Details</a> ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				if s.SourceType == "" {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "<span class=\"text-base-content/50\">—</span>")
+				if s.LogsURL != "" {
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "<a href=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-				} else {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "<span class=\"badge badge-ghost\">")
+					var templ_7745c5c3_Var15 templ.SafeURL
+					templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(s.LogsURL))
 					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					var templ_7745c5c3_Var15 string
-					templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(s.SourceType)
-					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/home.templ`, Line: 231, Col: 56}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/home.templ`, Line: 222, Col: 48}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "</span>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "\" target=\"_blank\" rel=\"noopener\" class=\"btn\">Logs</a> ")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "</td><td>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				if s.Status == "ready" {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "<span class=\"badge badge-success\">ready</span>")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-				} else if s.Status == "error" {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "<span class=\"badge badge-error\">error</span>")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-				} else {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "<span class=\"badge badge-ghost\">unknown</span>")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "</td><td class=\"truncate max-w-xs\">")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
 				}
 				if s.URL != "" {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "<a class=\"link\" href=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "<a href=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var16 templ.SafeURL
-					templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinURLErrs(s.URL)
+					templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(s.URL))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/home.templ`, Line: 245, Col: 38}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/home.templ`, Line: 225, Col: 44}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var16))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "\" target=\"_blank\" rel=\"noopener\">")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					var templ_7745c5c3_Var17 string
-					templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(s.URL)
-					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/home.templ`, Line: 245, Col: 77}
-					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "</a>")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-				} else {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "<span class=\"text-base-content/50\">—</span>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "\" target=\"_blank\" rel=\"noopener\" class=\"btn\">Open ↗</a>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "</td><td class=\"text-xs text-base-content/70\">")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var18 string
-				templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.JoinStringErrs(s.UpdatedText)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/home.templ`, Line: 250, Col: 64}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var18))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "</td><td class=\"text-right\"><div class=\"flex gap-2 flex-wrap justify-end\">")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				if s.URL != "" {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, "<a class=\"btn btn-xs\" href=\"")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					var templ_7745c5c3_Var19 templ.SafeURL
-					templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinURLErrs(s.URL)
-					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/home.templ`, Line: 254, Col: 45}
-					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, "\" target=\"_blank\" rel=\"noopener\">Open</a> ")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-				}
-				if s.LogsURL != "" {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 50, "<a class=\"btn btn-xs btn-outline\" href=\"")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					var templ_7745c5c3_Var20 templ.SafeURL
-					templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinURLErrs(s.LogsURL)
-					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/home.templ`, Line: 257, Col: 61}
-					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 51, "\" target=\"_blank\" rel=\"noopener\">Logs</a> ")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-				}
-				if s.MetricsURL != "" {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 52, "<a class=\"btn btn-xs btn-outline\" href=\"")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					var templ_7745c5c3_Var21 templ.SafeURL
-					templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinURLErrs(s.MetricsURL)
-					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/home.templ`, Line: 260, Col: 64}
-					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 53, "\" target=\"_blank\" rel=\"noopener\">Metrics</a>")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 54, "<form method=\"post\" action=\"")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var22 templ.SafeURL
-				templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.JoinURLErrs(s.RedeployURL)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/home.templ`, Line: 262, Col: 52}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var22))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 55, "\"><input type=\"hidden\" name=\"return_to\" value=\"/\"> <button class=\"btn btn-xs btn-ghost\" type=\"submit\">Redeploy</button></form><form method=\"post\" action=\"")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var23 templ.SafeURL
-				templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinURLErrs(s.DeleteURL)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/home.templ`, Line: 266, Col: 50}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var23))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 56, "\" onsubmit=\"return confirm('Delete this service?');\"><input type=\"hidden\" name=\"return_to\" value=\"/\"> <button class=\"btn btn-xs btn-error btn-outline\" type=\"submit\">Delete</button></form><form method=\"post\" action=\"")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var24 templ.SafeURL
-				templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.JoinURLErrs(s.DisableURL)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/home.templ`, Line: 270, Col: 51}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var24))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 57, "\" onsubmit=\"return confirm('Disable public traffic for this service?');\"><input type=\"hidden\" name=\"return_to\" value=\"/\"> <button class=\"btn btn-xs btn-warning btn-outline\" type=\"submit\">Disable Public</button></form></div></td></tr>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "</div></td></tr>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 58, "</tbody></table></div><div class=\"mt-3\"><a class=\"link\" href=\"/services\">View all services →</a></div>")
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "</tbody></table></div><!-- Auth / context signals --><div class=\"section-hdr\"><span class=\"section-title\">Signals</span> <span style=\"font-size:10px;color:var(--t3);\">last 24h</span></div><div style=\"background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);overflow:hidden;\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if vm.AuthStatus != "ok" {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "<div style=\"display:flex;align-items:flex-start;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);\"><span style=\"font-size:10px;padding:2px 6px;border-radius:4px;font-family:var(--mono);font-weight:500;flex-shrink:0;margin-top:1px;background:var(--yellow-bg);color:var(--yellow);border:1px solid var(--yellow-border);\">warn</span><div style=\"flex:1;min-width:0;\"><div style=\"font-size:12px;color:var(--t2);font-weight:500;\">Not authenticated</div><div style=\"font-size:11px;color:var(--t3);margin-top:1px;\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			if vm.AuthHint != "" {
+				var templ_7745c5c3_Var17 string
+				templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(vm.AuthHint)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/home.templ`, Line: 251, Col: 25}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			} else {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "Run: advncd login")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "</div></div><span style=\"font-size:10px;color:var(--t3);font-family:var(--mono);flex-shrink:0;padding-top:2px;\">now</span></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 59, "<div class=\"mt-6 text-xs text-base-content/50\">Rendered at ")
+		if vm.ServicesIssues > 0 {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "<div style=\"display:flex;align-items:flex-start;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);\"><span style=\"font-size:10px;padding:2px 6px;border-radius:4px;font-family:var(--mono);font-weight:500;flex-shrink:0;margin-top:1px;background:var(--yellow-bg);color:var(--yellow);border:1px solid var(--yellow-border);\">warn</span><div style=\"flex:1;min-width:0;\"><div style=\"font-size:12px;color:var(--t2);font-weight:500;\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var18 string
+			templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.JoinStringErrs(itoa(vm.ServicesIssues))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/home.templ`, Line: 265, Col: 94}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var18))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, " service(s) not ready</div><div style=\"font-size:11px;color:var(--t3);margin-top:1px;\">Check the Services page for details and logs.</div></div><span style=\"font-size:10px;color:var(--t3);font-family:var(--mono);flex-shrink:0;padding-top:2px;\">now</span></div>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, "<div style=\"display:flex;align-items:flex-start;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);\"><span style=\"font-size:10px;padding:2px 6px;border-radius:4px;font-family:var(--mono);font-weight:500;flex-shrink:0;margin-top:1px;background:var(--bg4);color:var(--t3);border:1px solid var(--border);\">info</span><div style=\"flex:1;min-width:0;\"><div style=\"font-size:12px;color:var(--t2);font-weight:500;\">Billing export not connected</div><div style=\"font-size:11px;color:var(--t3);margin-top:1px;\">Costs shown are estimates only.</div></div><span style=\"font-size:10px;color:var(--t3);font-family:var(--mono);flex-shrink:0;padding-top:2px;\">—</span></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var25 string
-		templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(vm.Now.Format("2006-01-02 15:04:05"))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/home.templ`, Line: 288, Col: 53}
+		if vm.ServicesTotal > 0 {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 50, "<div style=\"display:flex;align-items:flex-start;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);\"><span style=\"font-size:10px;padding:2px 6px;border-radius:4px;font-family:var(--mono);font-weight:500;flex-shrink:0;margin-top:1px;background:var(--green-bg);color:var(--green);border:1px solid var(--green-border);\">ok</span><div style=\"flex:1;min-width:0;\"><div style=\"font-size:12px;color:var(--t2);font-weight:500;\">No sensitive env vars in query string</div><div style=\"font-size:11px;color:var(--t3);margin-top:1px;\">Check passed for all services</div></div><span style=\"font-size:10px;color:var(--t3);font-family:var(--mono);flex-shrink:0;padding-top:2px;\">now</span></div>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 60, "</div></div></div><div class=\"grid grid-cols-1 lg:grid-cols-2 gap-4 mt-6\"><div class=\"card bg-base-100 shadow\"><div class=\"card-body\"><h2 class=\"card-title\">Context Management</h2><p class=\"text-sm text-base-content/70\">Current execution context plus recent choices from local registry.</p><div class=\"mt-3 text-sm\"><div><span class=\"text-base-content/60\">account:</span> <span class=\"font-medium\">")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var26 string
-		templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinStringErrs(vm.Email)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/home.templ`, Line: 299, Col: 96}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var26))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 61, "</span></div><div><span class=\"text-base-content/60\">project:</span> <span class=\"font-mono\">")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var27 string
-		templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.JoinStringErrs(vm.ProjectID)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/home.templ`, Line: 300, Col: 98}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var27))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 62, "</span></div><div><span class=\"text-base-content/60\">region:</span> <span class=\"font-mono\">")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var28 string
-		templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinStringErrs(vm.Region)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/home.templ`, Line: 301, Col: 94}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var28))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 63, "</span></div></div><div class=\"mt-3 text-sm\"><div class=\"text-base-content/60\">recent projects</div>")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		if len(vm.RecentProjects) == 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 64, "<div class=\"text-base-content/50\">—</div>")
+		if vm.ServicesReady > 0 {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 51, "<div style=\"display:flex;align-items:flex-start;gap:10px;padding:10px 14px;\"><span style=\"font-size:10px;padding:2px 6px;border-radius:4px;font-family:var(--mono);font-weight:500;flex-shrink:0;margin-top:1px;background:var(--green-bg);color:var(--green);border:1px solid var(--green-border);\">ok</span><div style=\"flex:1;min-width:0;\"><div style=\"font-size:12px;color:var(--t2);font-weight:500;\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var19 string
+			templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinStringErrs(itoa(vm.ServicesReady))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/home.templ`, Line: 296, Col: 93}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 52, " service(s) deployed successfully</div><div style=\"font-size:11px;color:var(--t3);margin-top:1px;\">RoutesReady · ConfigurationsReady — succeeded</div></div><span style=\"font-size:10px;color:var(--t3);font-family:var(--mono);flex-shrink:0;padding-top:2px;\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var20 string
+			templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(vm.Now.Format("15:04"))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/home.templ`, Line: 299, Col: 130}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 53, "</span></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 65, "<div class=\"flex gap-2 flex-wrap\">")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			for _, p := range vm.RecentProjects {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 66, "<span class=\"badge badge-ghost\">")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var29 string
-				templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.JoinStringErrs(p)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/home.templ`, Line: 310, Col: 42}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var29))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 67, "</span>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 68, "</div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 54, "<div style=\"display:flex;align-items:flex-start;gap:10px;padding:10px 14px;\"><span style=\"font-size:10px;padding:2px 6px;border-radius:4px;font-family:var(--mono);font-weight:500;flex-shrink:0;margin-top:1px;background:var(--bg4);color:var(--t3);border:1px solid var(--border);\">info</span><div style=\"flex:1;min-width:0;\"><div style=\"font-size:12px;color:var(--t2);font-weight:500;\">No services deployed</div><div style=\"font-size:11px;color:var(--t3);margin-top:1px;\">Run <code>advncd deploy</code> or use <a href=\"/deploy-local\" style=\"color:var(--blue);text-decoration:none;\">Deploy Local</a>.</div></div><span style=\"font-size:10px;color:var(--t3);font-family:var(--mono);flex-shrink:0;padding-top:2px;\">—</span></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 69, "</div><div class=\"mt-3 text-sm\"><div class=\"text-base-content/60\">recent regions</div>")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		if len(vm.RecentRegions) == 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 70, "<div class=\"text-base-content/50\">—</div>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 71, "<div class=\"flex gap-2 flex-wrap\">")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			for _, rg := range vm.RecentRegions {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 72, "<span class=\"badge badge-ghost\">")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var30 string
-				templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.JoinStringErrs(rg)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/dashboard/views/home.templ`, Line: 322, Col: 43}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var30))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 73, "</span>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 74, "</div>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 75, "</div><div class=\"mt-4 text-xs text-base-content/60\">To change defaults: <span class=\"font-mono\">advncd init</span></div></div></div><div class=\"card bg-base-100 shadow\"><div class=\"card-body\"><h2 class=\"card-title\">Launch Entry Points</h2><p class=\"text-sm text-base-content/70\">Quick bridge into deploy/launch flows.</p><div class=\"mt-4 flex gap-2 flex-wrap\"><a class=\"btn btn-sm btn-outline\" href=\"/deploy-local\">Deploy local project</a> <button class=\"btn btn-sm btn-ghost\" type=\"button\" id=\"copy-launch-inline\">Copy: advncd launch n8n</button></div><div class=\"mt-4 text-xs text-base-content/60\">Also available: <span class=\"font-mono\">advncd launch n8n</span></div></div></div></div><script>\ndocument.addEventListener(\"click\", async (e) => {\n  const btn = e.target.closest(\"#copy-launch-inline\");\n  if (!btn) return;\n  try {\n    await navigator.clipboard.writeText(\"advncd launch n8n\");\n    const prev = btn.textContent;\n    btn.textContent = \"Copied ✓\";\n    setTimeout(() => { btn.textContent = prev; }, 1500);\n  } catch (_) {}\n});\n\t</script></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 55, "</div><script>\n// Banner time counter\n(function() {\n  let secs = 0;\n  const el = document.getElementById('banner-time');\n  if (!el) return;\n  setInterval(() => {\n    secs++;\n    el.textContent = secs < 60\n      ? 'updated ' + secs + 's ago'\n      : 'updated ' + Math.floor(secs/60) + 'm ago';\n  }, 1000);\n})();\n\n// Traffic sparkline\n(function() {\n  const spark = document.getElementById('traffic-spark');\n  if (!spark) return;\n  setInterval(() => {\n    const pts = [];\n    for (let i = 0; i <= 8; i++) pts.push(i*15 + ',' + (14+Math.random()*10).toFixed(1));\n    spark.setAttribute('points', pts.join(' '));\n  }, 3000);\n})();\n</script>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
